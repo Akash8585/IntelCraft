@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import Header from './components/Header';
 import ResearchBriefings from './components/ResearchBriefings';
 import CurationExtraction from './components/CurationExtraction';
@@ -8,9 +9,13 @@ import ResearchReport from './components/ResearchReport';
 import ResearchForm from './components/ResearchForm';
 import EmailDisplay from './components/EmailDisplay';
 import ProposalDisplay from './components/ProposalDisplay';
+import { AuthPage } from './components/Auth/AuthPage';
+import { AuthCallback } from './components/Auth/AuthCallback';
+import { useCustomAuthStore } from './stores/customAuth';
 import {ResearchOutput, DocCount,DocCounts, EnrichmentCounts, ResearchState, ResearchStatusType} from './types';
 import { checkForFinalReport } from './utils/handlers';
 import { colorAnimation, dmSansStyle, glassStyle, fadeInAnimation } from './styles';
+import { apiRequest } from './utils/api';
 
 const API_URL = import.meta.env.VITE_API_URL;
 const WS_URL = import.meta.env.VITE_WS_URL;
@@ -30,7 +35,8 @@ const dmSansStyleElement = document.createElement('style');
 dmSansStyleElement.textContent = dmSansStyle;
 document.head.appendChild(dmSansStyleElement);
 
-function App() {
+function AppContent() {
+  const { user, isAuthenticated, signOut } = useCustomAuthStore();
 
   const [isResearching, setIsResearching] = useState(false);
   const [status, setStatus] = useState<ResearchStatusType | null>(null);
@@ -674,14 +680,8 @@ function App() {
         help_description: formData.helpDescription || undefined,
       };
 
-      const response = await fetch(url, {
+      const response = await apiRequest('/research', {
         method: "POST",
-        mode: "cors",
-        credentials: "omit",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify(requestData),
       }).catch((error) => {
         console.error("Fetch error:", error);
@@ -723,11 +723,8 @@ function App() {
     setIsGeneratingPdf(true);
     try {
       console.log("Generating PDF with company name:", originalCompanyName);
-      const response = await fetch(`${API_URL}/generate-pdf`, {
+      const response = await apiRequest('/generate-pdf', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           report_content: output.details.report,
           company_name: originalCompanyName || output.details.report
@@ -897,12 +894,36 @@ function App() {
     };
   }, []);
 
+  // Show authentication page if not authenticated
+  if (!isAuthenticated) {
+    // Check if this is a callback from OAuth
+    if (window.location.pathname === '/auth/callback') {
+      return <AuthCallback />;
+    }
+    return <AuthPage />;
+  }
+
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-white p-8 relative">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(70,139,255,0.35)_1px,transparent_0)] bg-[length:24px_24px] bg-center"></div>
       <div className="max-w-5xl mx-auto space-y-8 relative">
-        {/* Header Component */}
-        <Header glassStyle={glassStyle.card} />
+        {/* Header Component with User Menu */}
+        <div className="flex justify-between items-center">
+          <Header glassStyle={glassStyle.card} />
+          <div className="flex items-center space-x-4">
+            {user && (
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-700">{user.name || user.email}</span>
+                <button
+                  onClick={signOut}
+                  className="bg-red-600 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-700 transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Form Section */}
         <ResearchForm 
@@ -940,6 +961,10 @@ function App() {
       </div>
     </div>
   );
+}
+
+function App() {
+  return <AppContent />;
 }
 
 export default App;

@@ -11,3 +11,13 @@ tavily_python==0.5.1
 uvicorn[standard]==0.34.0
 websockets==12.0
 google-generativeai==0.8.4
+# Authentication dependencies
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.6
+email-validator==2.1.0
+httpx==0.27.0
+# Database dependencies
+sqlalchemy==2.0.30
+asyncpg==0.29.0
+alembic==1.13.1

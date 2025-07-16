@@ -1,3 +1,4 @@
+import sys
 import asyncio
 import logging
 import os
@@ -8,14 +9,18 @@ from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from backend.graph import Graph
 from backend.services.pdf_service import PDFService
 from backend.services.websocket_manager import WebSocketManager
+from backend.database.session import init_db, engine
+from backend.auth.routes import router as auth_router
+from backend.auth.oauth_routes import router as oauth_router, old_callback_router
 
 # Load environment variables from .env file at startup
 env_path = Path(__file__).parent / '.env'
@@ -34,9 +39,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
+
+# Include authentication routes
+app.include_router(auth_router)
+app.include_router(oauth_router)
+app.include_router(old_callback_router)
 
 manager = WebSocketManager()
 pdf_service = PDFService({"pdf_output_dir": "pdfs"})
@@ -59,6 +69,22 @@ if mongo_uri := os.getenv("MONGODB_URI"):
     except Exception as e:
         logger.warning(f"Failed to initialize MongoDB: {e}. Continuing without persistence.")
 
+# Initialize database
+import asyncio
+try:
+    asyncio.run(init_db())
+    logger.info("Database initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize database: {e}")
+    raise
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Gracefully close database connections on shutdown"""
+    logger.info("Shutting down...")
+    await engine.dispose()
+    logger.info("Database connections closed")
+
 class ResearchRequest(BaseModel):
     company: str
     company_url: str | None = None
@@ -79,11 +105,43 @@ async def preflight():
     return response
 
 @app.post("/research")
-async def research(data: ResearchRequest):
+async def research(
+    data: ResearchRequest,
+    authorization: str = Header(None)
+):
+    # Verify user is authenticated
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authentication required")
+    
+    token = authorization.split(" ")[1]
+    from backend.auth.security import verify_token
+    token_data = verify_token(token)
+    if not token_data:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    
+    # Handle temporary Google OAuth users
+    if token_data.user_id.startswith("temp_"):
+        # Temporary user from Google OAuth
+        user = {"id": token_data.user_id, "email": "google_user@temp.com"}
+    else:
+        # Regular user from database
+        from backend.database.models import User
+        from backend.database.session import get_db
+        from sqlalchemy import select
+        
+        async for db in get_db():
+            result = await db.execute(select(User).where(User.id == token_data.user_id))
+            user_data = result.scalar_one_or_none()
+            
+            if not user_data:
+                raise HTTPException(status_code=401, detail="User not found")
+            
+            user = {"id": user_data.id, "email": user_data.email}
+            break
     try:
-        logger.info(f"Received research request for {data.company}")
+        logger.info(f"Received research request for {data.company} from user {user['id']}")
         job_id = str(uuid.uuid4())
-        asyncio.create_task(process_research(job_id, data))
+        asyncio.create_task(process_research(job_id, data, user['id']))
 
         response = JSONResponse(content={
             "status": "accepted",
@@ -100,10 +158,10 @@ async def research(data: ResearchRequest):
         logger.error(f"Error initiating research: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
-async def process_research(job_id: str, data: ResearchRequest):
+async def process_research(job_id: str, data: ResearchRequest, user_id: str):
     try:
         if mongodb:
-            mongodb.create_job(job_id, data.dict())
+            mongodb.create_job(job_id, data.dict(), user_id=user_id)
         await asyncio.sleep(1)  # Allow WebSocket connection
 
         await manager.send_status_update(job_id, status="processing", message="Starting research")
