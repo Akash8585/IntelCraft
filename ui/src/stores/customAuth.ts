@@ -30,6 +30,7 @@ interface AuthActions {
   clearAuth: () => void;
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
+  initializeAuth: () => Promise<void>;
 }
 
 type AuthStore = AuthState & AuthActions;
@@ -142,11 +143,11 @@ export const useCustomAuthStore = create<AuthStore>()(
           accessToken,
           sessionToken,
           isAuthenticated: true,
-          isLoading: false,
+          isLoading: true,
           error: null,
         });
         
-        // Fetch user info
+        // Fetch real user info from backend
         fetch(`${API_BASE_URL}/auth/me`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -157,33 +158,23 @@ export const useCustomAuthStore = create<AuthStore>()(
           if (response.ok) {
             return response.json();
           } else {
-            // If /auth/me fails, create a temporary user for Google OAuth
-            console.log('Creating temporary user for Google OAuth');
-            return {
-              id: 'temp_google_user',
-              email: 'google_user@temp.com',
-              name: 'Google User',
-              avatar_url: undefined,
-              is_active: true,
-              is_verified: true
-            };
+            throw new Error('Failed to fetch user info');
           }
         })
         .then(user => {
-          set({ user });
+          set({ 
+            user,
+            isLoading: false 
+          });
         })
         .catch(error => {
           console.error('Failed to fetch user info:', error);
-          // Create a temporary user as fallback
-          const tempUser = {
-            id: 'temp_google_user',
-            email: 'google_user@temp.com',
-            name: 'Google User',
-            avatar_url: undefined,
-            is_active: true,
-            is_verified: true
-          };
-          set({ user: tempUser });
+          set({ 
+            isLoading: false,
+            error: 'Failed to authenticate user. Please try again.'
+          });
+          // Clear invalid tokens
+          get().clearAuth();
         });
       },
 
@@ -229,6 +220,37 @@ export const useCustomAuthStore = create<AuthStore>()(
 
       setLoading: (loading: boolean) => {
         set({ isLoading: loading });
+      },
+
+      initializeAuth: async () => {
+        const { accessToken, user } = get();
+        
+        // If we have tokens but no user, try to fetch user info
+        if (accessToken && !user) {
+          set({ isLoading: true });
+          
+          try {
+            const response = await fetch(`${API_BASE_URL}/auth/me`, {
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            if (response.ok) {
+              const userData = await response.json();
+              set({ 
+                user: userData,
+                isLoading: false 
+              });
+            } else {
+              get().clearAuth();
+            }
+          } catch (error) {
+            console.error('Auth initialization error:', error);
+            get().clearAuth();
+          }
+        }
       },
     }),
     {

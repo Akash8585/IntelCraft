@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .google_oauth import GoogleOAuth
 from ..database.session import get_db
 from .models import Token
+import asyncio
 
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 old_callback_router = APIRouter(tags=["oauth"])  # Legacy path
@@ -40,42 +41,33 @@ async def google_callback(code: str, request: Request, db: AsyncSession = Depend
     print(f"Google OAuth callback received with code: {code[:20]}...")
     print(f"Redirect URI configured: {google_oauth.redirect_uri}")
 
-    try:
-        user, token, session_token = await google_oauth.authenticate_user(code, db)
-
-        # Redirect to frontend with tokens
-        frontend_url = "http://localhost:5174"
-        redirect_url = f"{frontend_url}/auth/callback?access_token={token.access_token}&session_token={session_token}"
-
-        print(f"Google OAuth successful for user: {user.email}")
-        print(f"Redirecting to frontend: {redirect_url}")
-        return RedirectResponse(url=redirect_url)
-
-    except Exception as e:
-        print(f"Google OAuth error: {str(e)}")
-
+    # Try to authenticate user with retries
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            # Fallback: Temporary tokens
-            from ..auth.security import create_access_token, generate_session_token
-            jwt_token = create_access_token(data={"sub": "temp_google_user"})
-            session_token = generate_session_token()
-
-            token = Token(
-                access_token=jwt_token,
-                expires_in=60 * 60  # 1 hour
-            )
-
+            user, token, session_token = await google_oauth.authenticate_user(code, db)
+            
+            # Success - redirect to frontend with tokens
             frontend_url = "http://localhost:5174"
             redirect_url = f"{frontend_url}/auth/callback?access_token={token.access_token}&session_token={session_token}"
 
-            print(f"Using temporary tokens due to DB error. Redirecting to: {redirect_url}")
+            print(f"Google OAuth successful for user: {user.email} (attempt {attempt + 1})")
+            print(f"Redirecting to frontend: {redirect_url}")
             return RedirectResponse(url=redirect_url)
 
-        except Exception as fallback_error:
-            print(f"Fallback error: {str(fallback_error)}")
-            frontend_url = "http://localhost:5174"
-            error_url = f"{frontend_url}/auth/error?message=Authentication failed"
-            return RedirectResponse(url=error_url)
+        except Exception as e:
+            print(f"Google OAuth error (attempt {attempt + 1}): {str(e)}")
+            
+            if attempt < max_retries - 1:
+                # Wait before retrying
+                await asyncio.sleep(1)
+                continue
+            else:
+                # All attempts failed, redirect to error page
+                print(f"Google OAuth failed after {max_retries} attempts")
+                frontend_url = "http://localhost:5174"
+                error_url = f"{frontend_url}/auth/error?message=Authentication failed after multiple attempts"
+                return RedirectResponse(url=error_url)
 
 
 @old_callback_router.get("/api/auth/callback/google")

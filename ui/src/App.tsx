@@ -36,7 +36,12 @@ dmSansStyleElement.textContent = dmSansStyle;
 document.head.appendChild(dmSansStyleElement);
 
 function AppContent() {
-  const { user, isAuthenticated, signOut } = useCustomAuthStore();
+  const { user, isAuthenticated, signOut, initializeAuth } = useCustomAuthStore();
+
+  // Initialize authentication on app start
+  useEffect(() => {
+    initializeAuth();
+  }, [initializeAuth]);
 
   const [isResearching, setIsResearching] = useState(false);
   const [status, setStatus] = useState<ResearchStatusType | null>(null);
@@ -688,12 +693,6 @@ function AppContent() {
         throw error;
       });
 
-      console.log("Response received:", {
-        status: response.status,
-        ok: response.ok,
-        statusText: response.statusText,
-      });
-
       if (!response.ok) {
         const errorText = await response.text();
         console.log("Error response:", errorText);
@@ -701,7 +700,6 @@ function AppContent() {
       }
 
       const data = await response.json();
-      console.log("Response data:", data);
 
       if (data.job_id) {
         console.log("Connecting WebSocket with job_id:", data.job_id);
@@ -895,11 +893,27 @@ function AppContent() {
   }, []);
 
   // Show authentication page if not authenticated
+  const { isLoading } = useCustomAuthStore();
+  
   if (!isAuthenticated) {
     // Check if this is a callback from OAuth
     if (window.location.pathname === '/auth/callback') {
       return <AuthCallback />;
     }
+    
+    // Show loading while checking authentication
+    if (isLoading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
+            <div className="animate-spin h-8 w-8 mx-auto mb-4 text-blue-600 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading...</h2>
+            <p className="text-gray-600">Checking authentication status...</p>
+          </div>
+        </div>
+      );
+    }
+    
     return <AuthPage />;
   }
 
@@ -921,6 +935,9 @@ function AppContent() {
                   Sign Out
                 </button>
               </div>
+            )}
+            {!user && isAuthenticated && (
+              <div className="text-sm text-gray-500">Loading user info...</div>
             )}
           </div>
         </div>

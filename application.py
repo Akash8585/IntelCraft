@@ -119,25 +119,20 @@ async def research(
     if not token_data:
         raise HTTPException(status_code=401, detail="Invalid token")
     
-    # Handle temporary Google OAuth users
-    if token_data.user_id.startswith("temp_"):
-        # Temporary user from Google OAuth
-        user = {"id": token_data.user_id, "email": "google_user@temp.com"}
-    else:
-        # Regular user from database
-        from backend.database.models import User
-        from backend.database.session import get_db
-        from sqlalchemy import select
+    # Get user from database
+    from backend.database.models import User
+    from backend.database.session import get_db
+    from sqlalchemy import select
+    
+    async for db in get_db():
+        result = await db.execute(select(User).where(User.id == token_data.user_id))
+        user_data = result.scalar_one_or_none()
         
-        async for db in get_db():
-            result = await db.execute(select(User).where(User.id == token_data.user_id))
-            user_data = result.scalar_one_or_none()
-            
-            if not user_data:
-                raise HTTPException(status_code=401, detail="User not found")
-            
-            user = {"id": user_data.id, "email": user_data.email}
-            break
+        if not user_data:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        user = {"id": user_data.id, "email": user_data.email}
+        break
     try:
         logger.info(f"Received research request for {data.company} from user {user['id']}")
         job_id = str(uuid.uuid4())
