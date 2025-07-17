@@ -1,60 +1,6 @@
 import { API_URL } from './constants';
 import { ResearchOutput, ResearchState, ResearchStatusType } from '../types';
 
-export const handleGeneratePdf = async (
-  output: ResearchOutput | null,
-  originalCompanyName: string,
-  setIsGeneratingPdf: (value: boolean) => void,
-  setError: (error: string | null) => void,
-  isGeneratingPdf: boolean
-) => {
-  if (!output || isGeneratingPdf) return;
-  
-  setIsGeneratingPdf(true);
-  try {
-    console.log("Generating PDF with company name:", originalCompanyName);
-    const response = await fetch(`${API_URL}/generate-pdf`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        report_content: output.details.report,
-        company_name: originalCompanyName || 'research_report'
-      }),
-    });
-    
-    if (!response.ok) {
-      throw new Error('Failed to generate PDF');
-    }
-    
-    // Get the blob from the response
-    const blob = await response.blob();
-    
-    // Create a URL for the blob
-    const url = window.URL.createObjectURL(blob);
-    
-    // Create a temporary link element
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${originalCompanyName || 'research_report'}.pdf`;
-    
-    // Append to body, click, and remove
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    // Clean up the URL
-    window.URL.revokeObjectURL(url);
-    
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    setError(error instanceof Error ? error.message : 'Failed to generate PDF');
-  } finally {
-    setIsGeneratingPdf(false);
-  }
-};
-
 export const handleCopyToClipboard = async (
   output: ResearchOutput | null,
   setIsCopied: (value: boolean) => void,
@@ -121,7 +67,6 @@ export const resetResearch = (
   setError: (error: string | null) => void,
   setIsComplete: (value: boolean) => void,
   setResearchState: (state: ResearchState) => void,
-  setPdfUrl: (url: string | null) => void,
   setCurrentPhase: (phase: 'search' | 'enrichment' | 'briefing' | 'complete' | null) => void,
   setIsSearchPhase: (value: boolean) => void,
   setShouldShowQueries: (value: boolean) => void,
@@ -151,7 +96,6 @@ export const resetResearch = (
         news: false
       }
     });
-    setPdfUrl(null);
     setCurrentPhase(null);
     setIsSearchPhase(false);
     setShouldShowQueries(false);

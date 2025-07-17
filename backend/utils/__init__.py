@@ -1,4 +1,4 @@
-from .utils import generate_pdf_from_md, clean_text
+from .utils import clean_text
 from .references import (
     extract_domain_name, 
     extract_title_from_url_path, 

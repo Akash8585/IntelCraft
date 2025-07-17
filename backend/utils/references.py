@@ -280,7 +280,7 @@ def extract_link_info(line: str) -> tuple[str, str]:
             if not website or website == ".":
                 website = extract_domain_name(url)
             
-            # Format for PDF: "Website. Title. URL"
+        
             return f"{website}. {title}. {link_text}", url
         
         # Fallback for standard markdown links

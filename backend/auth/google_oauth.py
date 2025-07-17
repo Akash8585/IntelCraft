@@ -147,6 +147,9 @@ class GoogleOAuth:
             return user, token, session_token
 
         except Exception as e:
-            await db.rollback()
+            try:
+                await db.rollback()
+            except:
+                pass  # Ignore rollback errors
             print(f"Database error in Google OAuth: {str(e)}")
             raise HTTPException(status_code=500, detail="Authentication failed")

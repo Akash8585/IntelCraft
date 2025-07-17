@@ -2,24 +2,17 @@ import React from 'react';
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
-import { Check, Copy, Download, Loader2 } from 'lucide-react';
-import { GlassStyle, AnimationStyle } from '../types';
+import { Check, Copy, Loader2 } from 'lucide-react';
+import { ResearchOutput } from '../types';
 
 interface ResearchReportProps {
-  output: {
-    summary: string;
-    details: {
-      report: string;
-    };
-  } | null;
+  output: ResearchOutput;
   isResetting: boolean;
-  glassStyle: GlassStyle;
-  fadeInAnimation: AnimationStyle;
+  glassStyle: any;
+  fadeInAnimation: any;
   loaderColor: string;
-  isGeneratingPdf: boolean;
   isCopied: boolean;
   onCopyToClipboard: () => void;
-  onGeneratePdf: () => void;
 }
 
 const ResearchReport: React.FC<ResearchReportProps> = ({
@@ -28,10 +21,8 @@ const ResearchReport: React.FC<ResearchReportProps> = ({
   glassStyle,
   fadeInAnimation,
   loaderColor,
-  isGeneratingPdf,
   isCopied,
-  onCopyToClipboard,
-  onGeneratePdf
+  onCopyToClipboard
 }) => {
   if (!output || !output.details) return null;
 
@@ -50,23 +41,6 @@ const ResearchReport: React.FC<ResearchReportProps> = ({
                 <Check className="h-5 w-5" />
               ) : (
                 <Copy className="h-5 w-5" />
-              )}
-            </button>
-            <button
-              onClick={onGeneratePdf}
-              disabled={isGeneratingPdf}
-              className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-[#FFB800] text-white hover:bg-[#FFA800] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGeneratingPdf ? (
-                <>
-                  <Loader2 className="animate-spin h-5 w-5 mr-2" style={{ stroke: loaderColor }} />
-                  Generating PDF...
-                </>
-              ) : (
-                <>
-                  <Download className="h-5 w-5" />
-                  <span className="ml-2">PDF</span>
-                </>
               )}
             </button>
           </>

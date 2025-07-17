@@ -7,6 +7,10 @@ from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
+# Set Windows event loop policy to prevent "Event loop is closed" errors
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends, Header
@@ -16,7 +20,6 @@ from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 from backend.graph import Graph
-from backend.services.pdf_service import PDFService
 from backend.services.websocket_manager import WebSocketManager
 from backend.database.session import init_db, engine
 from backend.auth.routes import router as auth_router
@@ -49,7 +52,6 @@ app.include_router(oauth_router)
 app.include_router(old_callback_router)
 
 manager = WebSocketManager()
-pdf_service = PDFService({"pdf_output_dir": "pdfs"})
 
 job_status = defaultdict(lambda: {
     "status": "pending",
@@ -64,6 +66,7 @@ job_status = defaultdict(lambda: {
 mongodb = None
 if mongo_uri := os.getenv("MONGODB_URI"):
     try:
+        from backend.services.mongodb_service import MongoDBService
         mongodb = MongoDBService(mongo_uri)
         logger.info("MongoDB integration enabled")
     except Exception as e:
@@ -91,10 +94,6 @@ class ResearchRequest(BaseModel):
     industry: str | None = None
     hq_location: str | None = None
     help_description: str | None = None
-
-class PDFGenerationRequest(BaseModel):
-    report_content: str
-    company_name: str | None = None
 
 @app.options("/research")
 async def preflight():
@@ -124,15 +123,19 @@ async def research(
     from backend.database.session import get_db
     from sqlalchemy import select
     
-    async for db in get_db():
-        result = await db.execute(select(User).where(User.id == token_data.user_id))
-        user_data = result.scalar_one_or_none()
-        
-        if not user_data:
-            raise HTTPException(status_code=401, detail="User not found")
-        
-        user = {"id": user_data.id, "email": user_data.email}
-        break
+    try:
+        async for db in get_db():
+            result = await db.execute(select(User).where(User.id == token_data.user_id))
+            user_data = result.scalar_one_or_none()
+            
+            if not user_data:
+                raise HTTPException(status_code=401, detail="User not found")
+            
+            user = {"id": user_data.id, "email": user_data.email}
+            break
+    except Exception as e:
+        logger.error(f"Database error in research endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database connection error")
     try:
         logger.info(f"Received research request for {data.company} from user {user['id']}")
         job_id = str(uuid.uuid4())
@@ -227,13 +230,6 @@ async def process_research(job_id: str, data: ResearchRequest, user_id: str):
 async def ping():
     return {"message": "Alive"}
 
-@app.get("/research/pdf/{filename}")
-async def get_pdf(filename: str):
-    pdf_path = os.path.join("pdfs", filename)
-    if not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF not found")
-    return FileResponse(pdf_path, media_type='application/pdf', filename=filename)
-
 @app.websocket("/research/ws/{job_id}")
 async def websocket_endpoint(websocket: WebSocket, job_id: str):
     try:
@@ -283,25 +279,6 @@ async def get_research_report(job_id: str):
     if not report:
         raise HTTPException(status_code=404, detail="Research report not found")
     return report
-
-@app.post("/generate-pdf")
-async def generate_pdf(data: PDFGenerationRequest):
-    """Generate a PDF from markdown content and stream it to the client."""
-    try:
-        success, result = pdf_service.generate_pdf_stream(data.report_content, data.company_name)
-        if success:
-            pdf_buffer, filename = result
-            return StreamingResponse(
-                pdf_buffer,
-                media_type='application/pdf',
-                headers={
-                    'Content-Disposition': f'attachment; filename="{filename}"'
-                }
-            )
-        else:
-            raise HTTPException(status_code=500, detail=result)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

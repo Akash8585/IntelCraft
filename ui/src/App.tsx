@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Header from './components/Header';
+import DashboardHeader from './components/DashboardHeader';
 import ResearchBriefings from './components/ResearchBriefings';
 import CurationExtraction from './components/CurationExtraction';
 import ResearchQueries from './components/ResearchQueries';
@@ -9,6 +11,8 @@ import ResearchReport from './components/ResearchReport';
 import ResearchForm from './components/ResearchForm';
 import EmailDisplay from './components/EmailDisplay';
 import ProposalDisplay from './components/ProposalDisplay';
+import LandingPage from './components/LandingPage';
+import Sidebar from './components/Sidebar';
 import { AuthPage } from './components/Auth/AuthPage';
 import { AuthCallback } from './components/Auth/AuthCallback';
 import { useCustomAuthStore } from './stores/customAuth';
@@ -36,12 +40,39 @@ dmSansStyleElement.textContent = dmSansStyle;
 document.head.appendChild(dmSansStyleElement);
 
 function AppContent() {
-  const { user, isAuthenticated, signOut, initializeAuth } = useCustomAuthStore();
+  const navigate = useNavigate();
+  const { user, isAuthenticated, signOut: originalSignOut, initializeAuth, isLoading } = useCustomAuthStore();
 
-  // Initialize authentication on app start
+  // Custom sign out function that redirects to homepage
+  const signOut = async () => {
+    await originalSignOut();
+    navigate('/');
+  };
+
   useEffect(() => {
     initializeAuth();
   }, [initializeAuth]);
+
+  // Check for pending research data after authentication
+  useEffect(() => {
+    if (isAuthenticated) {
+      const pendingData = localStorage.getItem('pendingResearchData');
+      if (pendingData) {
+        try {
+          const formData = JSON.parse(pendingData);
+          // Auto-fill the research form with pending data
+          setOriginalCompanyName(formData.companyName);
+          // Clear the pending data
+          localStorage.removeItem('pendingResearchData');
+          // Optionally auto-start the research
+          // handleFormSubmit(formData);
+        } catch (error) {
+          console.error('Error parsing pending research data:', error);
+          localStorage.removeItem('pendingResearchData');
+        }
+      }
+    }
+  }, [isAuthenticated]);
 
   const [isResearching, setIsResearching] = useState(false);
   const [status, setStatus] = useState<ResearchStatusType | null>(null);
@@ -98,10 +129,6 @@ function AppContent() {
   // Add state for phase tracking
   const [currentPhase, setCurrentPhase] = useState<'search' | 'enrichment' | 'briefing' | 'complete' | null>(null);
 
-  // Add new state for PDF generation
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-  const [, setPdfUrl] = useState<string | null>(null);
-
   const [isResetting, setIsResetting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
@@ -115,6 +142,10 @@ function AppContent() {
   // Add state for proposal functionality
   const [proposal, setProposal] = useState<string | null>(null);
   const [isProposalGenerating, setIsProposalGenerating] = useState(false);
+  
+  // Research session management
+  const [currentResearchId, setCurrentResearchId] = useState<string | null>(null);
+  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   
   // Add useEffect for color cycling
   useEffect(() => {
@@ -160,7 +191,6 @@ function AppContent() {
           news: false
         }
       });
-      setPdfUrl(null);
       setCurrentPhase(null);
       setIsSearchPhase(false);
       setShouldShowQueries(false);
@@ -179,10 +209,10 @@ function AppContent() {
   const connectWebSocket = (jobId: string) => {
     console.log("Initializing WebSocket connection for job:", jobId);
     
-    // Use the WS_URL directly if it's a full URL, otherwise construct it
-    const wsUrl = WS_URL.startsWith('wss://') || WS_URL.startsWith('ws://')
-      ? `${WS_URL}/research/ws/${jobId}`
-      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${WS_URL}/research/ws/${jobId}`;
+    // Construct WebSocket URL based on current protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = WS_URL.replace(/^https?:\/\//, '').replace(/^ws:\/\//, '').replace(/^wss:\/\//, ''); // Remove any protocol prefixes
+    const wsUrl = `${protocol}//${host}/research/ws/${jobId}`;
     
     console.log("Connecting to WebSocket URL:", wsUrl);
     
@@ -243,8 +273,14 @@ function AppContent() {
         readyState: ws.readyState,
         url: wsUrl
       });
-      setError("WebSocket connection error");
-      setIsResearching(false);
+      
+      // Don't immediately set error for connection issues - let onclose handle reconnection
+      if (ws.readyState === WebSocket.CONNECTING) {
+        console.log("WebSocket connection failed, will attempt reconnection");
+      } else {
+        setError("WebSocket connection error");
+        setIsResearching(false);
+      }
     };
 
     ws.onmessage = (event) => {
@@ -319,6 +355,12 @@ function AppContent() {
             },
           });
           setHasFinalReport(true);
+          
+          // Update research session status
+          if (currentResearchId) {
+            const summary = statusData.result.report ? statusData.result.report.substring(0, 100) + '...' : undefined;
+            updateResearchSessionStatus(currentResearchId, 'completed', summary);
+          }
           
           // Clear polling interval if it exists
           if (pollingIntervalRef.current) {
@@ -616,6 +658,12 @@ function AppContent() {
           statusData.status === "website_error"
         ) {
           setError(statusData.error || statusData.message || "Research failed");
+          
+          // Update research session status
+          if (currentResearchId) {
+            updateResearchSessionStatus(currentResearchId, 'failed');
+          }
+          
           if (statusData.status === "website_error" && statusData.result?.continue_research) {
           } else {
             setIsResearching(false);
@@ -640,7 +688,6 @@ function AppContent() {
   const handleFormSubmit = async (formData: {
     companyName: string;
     companyUrl: string;
-    companyHq: string;
     companyIndustry: string;
     helpDescription: string;
   }) => {
@@ -666,6 +713,9 @@ function AppContent() {
     setOriginalCompanyName(formData.companyName);
     setHasScrolledToStatus(false); // Reset scroll flag when starting new research
 
+    // Save research session
+    const researchId = saveResearchSession(formData.companyName);
+
     try {
       const url = `${API_URL}/research`;
 
@@ -681,7 +731,6 @@ function AppContent() {
         company: formData.companyName,
         company_url: formattedCompanyUrl,
         industry: formData.companyIndustry || undefined,
-        hq_location: formData.companyHq || undefined,
         help_description: formData.helpDescription || undefined,
       };
 
@@ -711,54 +760,15 @@ function AppContent() {
       console.log("Caught error:", err);
       setError(err instanceof Error ? err.message : "Failed to start research");
       setIsResearching(false);
+      
+      // Update research session status if it was created
+      if (currentResearchId) {
+        updateResearchSessionStatus(currentResearchId, 'failed');
+      }
     }
   };
 
-  // Add new function to handle PDF generation
-  const handleGeneratePdf = async () => {
-    if (!output || isGeneratingPdf) return;
-    
-    setIsGeneratingPdf(true);
-    try {
-      console.log("Generating PDF with company name:", originalCompanyName);
-      const response = await apiRequest('/generate-pdf', {
-        method: 'POST',
-        body: JSON.stringify({
-          report_content: output.details.report,
-          company_name: originalCompanyName || output.details.report
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate PDF');
-      }
-      
-      // Get the blob from the response
-      const blob = await response.blob();
-      
-      // Create a URL for the blob
-      const url = window.URL.createObjectURL(blob);
-      
-      // Create a temporary link element
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${originalCompanyName || 'research_report'}.pdf`;
-      
-      // Append to body, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      // Clean up the URL
-      window.URL.revokeObjectURL(url);
-      
-    } catch (error) {
-      console.error('Error generating PDF:', error);
-      setError(error instanceof Error ? error.message : 'Failed to generate PDF');
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
+
 
   // Add new function to handle copying to clipboard
   const handleCopyToClipboard = async () => {
@@ -799,10 +809,8 @@ function AppContent() {
           glassStyle={glassStyle}
           fadeInAnimation={fadeInAnimation}
           loaderColor={loaderColor}
-          isGeneratingPdf={isGeneratingPdf}
           isCopied={isCopied}
           onCopyToClipboard={handleCopyToClipboard}
-          onGeneratePdf={handleGeneratePdf}
         />
       );
     }
@@ -892,96 +900,165 @@ function AppContent() {
     };
   }, []);
 
-  // Show authentication page if not authenticated
-  const { isLoading } = useCustomAuthStore();
-  
-  if (!isAuthenticated) {
-    // Check if this is a callback from OAuth
-    if (window.location.pathname === '/auth/callback') {
-      return <AuthCallback />;
-    }
+  // Handle landing page form submission
+  const handleLandingPageSubmit = (formData: {
+    companyName: string;
+    companyUrl: string;
+    companyIndustry: string;
+    helpDescription: string;
+  }) => {
+    localStorage.setItem('pendingResearchData', JSON.stringify(formData));
+    navigate('/auth');
+  };
+
+  // Handle research session selection
+  const handleSelectResearch = (researchId: string) => {
+    setCurrentResearchId(researchId);
+    // TODO: Load the selected research data
+    console.log('Selected research:', researchId);
+  };
+
+  // Handle new research
+  const handleNewResearch = () => {
+    setCurrentResearchId(null);
+    resetResearch();
+  };
+
+  // Save research session when starting new research
+  const saveResearchSession = (companyName: string) => {
+    const researchId = `research_${Date.now()}`;
+    const session = {
+      id: researchId,
+      companyName,
+      timestamp: new Date().toISOString(),
+      status: 'in_progress' as const,
+    };
     
-    // Show loading while checking authentication
-    if (isLoading) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
-            <div className="animate-spin h-8 w-8 mx-auto mb-4 text-blue-600 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading...</h2>
-            <p className="text-gray-600">Checking authentication status...</p>
-          </div>
+    const existingSessions = JSON.parse(localStorage.getItem('researchSessions') || '[]');
+    const updatedSessions = [session, ...existingSessions];
+    localStorage.setItem('researchSessions', JSON.stringify(updatedSessions));
+    
+    setCurrentResearchId(researchId);
+    return researchId;
+  };
+
+  // Update research session status
+  const updateResearchSessionStatus = (researchId: string, status: 'completed' | 'failed', summary?: string) => {
+    const existingSessions = JSON.parse(localStorage.getItem('researchSessions') || '[]');
+    const updatedSessions = existingSessions.map((session: any) => 
+      session.id === researchId 
+        ? { ...session, status, summary }
+        : session
+    );
+    localStorage.setItem('researchSessions', JSON.stringify(updatedSessions));
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 text-center">
+          <div className="animate-spin h-8 w-8 mx-auto mb-4 text-blue-600 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Loading...</h2>
+          <p className="text-gray-600">Checking authentication status...</p>
         </div>
-      );
-    }
-    
-    return <AuthPage />;
+      </div>
+    );
   }
 
-  return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-white p-8 relative">
+  // Protected route component for authenticated users
+  const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+    if (!isAuthenticated) {
+      return <Navigate to="/auth" replace />;
+    }
+    return <>{children}</>;
+  };
+
+  // Main app dashboard component
+  const AppDashboard = () => (
+    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-white relative">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(70,139,255,0.35)_1px,transparent_0)] bg-[length:24px_24px] bg-center"></div>
-      <div className="max-w-5xl mx-auto space-y-8 relative">
-        {/* Header Component with User Menu */}
-        <div className="flex justify-between items-center">
-          <Header glassStyle={glassStyle.card} />
-          <div className="flex items-center space-x-4">
-            {user && (
-              <div className="flex items-center space-x-2">
-                <span className="text-sm text-gray-700">{user.name || user.email}</span>
-                <button
-                  onClick={signOut}
-                  className="bg-red-600 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-700 transition-colors"
-                >
-                  Sign Out
-                </button>
-              </div>
-            )}
-            {!user && isAuthenticated && (
-              <div className="text-sm text-gray-500">Loading user info...</div>
-            )}
+      
+      {/* Sidebar */}
+      <Sidebar
+        onSelectResearch={handleSelectResearch}
+        onNewResearch={handleNewResearch}
+        currentResearchId={currentResearchId || undefined}
+        glassStyle={glassStyle.card}
+      />
+
+      {/* Main Content */}
+      <div 
+        className={`transition-all duration-300 ease-in-out ${sidebarExpanded ? '' : 'ml-18'} p-8 pt-16`}
+        style={{ marginLeft: sidebarExpanded ? '280px' : '72px' }}
+      >
+        <div className="max-w-5xl mx-auto space-y-8 relative">
+          {/* Dashboard Header */}
+          <DashboardHeader 
+            user={user} 
+            onSignOut={signOut} 
+            glassStyle={glassStyle.card} 
+            sidebarExpanded={sidebarExpanded}
+          />
+
+          {/* Form Section */}
+          <ResearchForm 
+            onSubmit={handleFormSubmit}
+            isResearching={isResearching}
+            glassStyle={glassStyle}
+            loaderColor={loaderColor}
+          />
+
+          {/* Error Message */}
+          {error && (
+            <div 
+              className={`${glassStyle.card} border-[#FE363B]/30 bg-[#FE363B]/10 ${fadeInAnimation.fadeIn} ${isResetting ? 'opacity-0 transform -translate-y-4' : 'opacity-100 transform translate-y-0'} font-['DM_Sans']`}
+            >
+              <p className="text-[#FE363B]">{error}</p>
+            </div>
+          )}
+
+          {/* Status Box */}
+          <ResearchStatus
+            status={status}
+            error={error}
+            isComplete={isComplete}
+            currentPhase={currentPhase}
+            isResetting={isResetting}
+            glassStyle={glassStyle}
+            loaderColor={loaderColor}
+            statusRef={statusRef}
+          />
+
+          {/* Progress Components Container */}
+          <div className="space-y-12 transition-all duration-500 ease-in-out">
+            {renderProgressComponents()}
           </div>
-        </div>
-
-        {/* Form Section */}
-        <ResearchForm 
-          onSubmit={handleFormSubmit}
-          isResearching={isResearching}
-          glassStyle={glassStyle}
-          loaderColor={loaderColor}
-        />
-
-        {/* Error Message */}
-        {error && (
-          <div 
-            className={`${glassStyle.card} border-[#FE363B]/30 bg-[#FE363B]/10 ${fadeInAnimation.fadeIn} ${isResetting ? 'opacity-0 transform -translate-y-4' : 'opacity-100 transform translate-y-0'} font-['DM_Sans']`}
-          >
-            <p className="text-[#FE363B]">{error}</p>
-          </div>
-        )}
-
-        {/* Status Box */}
-        <ResearchStatus
-          status={status}
-          error={error}
-          isComplete={isComplete}
-          currentPhase={currentPhase}
-          isResetting={isResetting}
-          glassStyle={glassStyle}
-          loaderColor={loaderColor}
-          statusRef={statusRef}
-        />
-
-        {/* Progress Components Container */}
-        <div className="space-y-12 transition-all duration-500 ease-in-out">
-          {renderProgressComponents()}
         </div>
       </div>
     </div>
   );
+
+  return (
+    <Routes>
+      <Route path="/" element={
+        isAuthenticated ? <Navigate to="/dashboard" replace /> : <LandingPage onGenerateResearch={handleLandingPageSubmit} />
+      } />
+      <Route path="/dashboard" element={
+        <ProtectedRoute>
+          <AppDashboard />
+        </ProtectedRoute>
+      } />
+      <Route path="/auth" element={
+        isAuthenticated ? <Navigate to="/dashboard" replace /> : <AuthPage />
+      } />
+      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/about" element={<div className="min-h-screen flex items-center justify-center text-2xl">About Page Coming Soon</div>} />
+      <Route path="/features" element={<div className="min-h-screen flex items-center justify-center text-2xl">Features Page Coming Soon</div>} />
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
+  );
 }
 
-function App() {
+export default function App() {
   return <AppContent />;
 }
-
-export default App;

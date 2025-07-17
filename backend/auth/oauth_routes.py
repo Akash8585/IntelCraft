@@ -58,6 +58,16 @@ async def google_callback(code: str, request: Request, db: AsyncSession = Depend
         except Exception as e:
             print(f"Google OAuth error (attempt {attempt + 1}): {str(e)}")
             
+            # If it's a database error, try to rollback and continue
+            if "Event loop is closed" in str(e) or "Database" in str(e):
+                try:
+                    await db.rollback()
+                except:
+                    pass
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2)  # Longer delay for database issues
+                    continue
+            
             if attempt < max_retries - 1:
                 # Wait before retrying
                 await asyncio.sleep(1)
