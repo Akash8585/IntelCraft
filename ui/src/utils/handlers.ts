@@ -1,4 +1,4 @@
-import { API_URL } from './constants';
+import { API_BASE_URL } from './constants';
 import { ResearchOutput, ResearchState, ResearchStatusType } from '../types';
 
 export const handleCopyToClipboard = async (
@@ -29,7 +29,7 @@ export const checkForFinalReport = async (
   pollingIntervalRef: React.MutableRefObject<NodeJS.Timeout | null>
 ) => {
   try {
-    const response = await fetch(`${API_URL}/research/status/${jobId}`);
+    const response = await fetch(`${API_BASE_URL}/research/status/${jobId}`);
     if (!response.ok) throw new Error('Failed to fetch status');
     
     const data = await response.json();

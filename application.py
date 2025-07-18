@@ -32,12 +32,19 @@ logger.addHandler(console_handler)
 
 app = FastAPI(title="IntelCraft API")
 
+# CORS configuration for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative dev port
+        "https://your-vercel-domain.vercel.app",  # Replace with your actual Vercel domain
+        "*"  # Allow all origins for testing (remove in production)
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Simple in-memory storage
