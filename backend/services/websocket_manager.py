@@ -62,13 +62,31 @@ class WebSocketManager:
             
     async def send_status_update(self, job_id: str, status: str, message: str = None, error: str = None, result: dict = None):
         """Helper method to send formatted status updates."""
+        # Clean result to ensure JSON serialization
+        def clean_result(obj):
+            """Recursively clean objects to ensure JSON serialization"""
+            if obj is None:
+                return None
+            elif isinstance(obj, dict):
+                return {k: clean_result(v) for k, v in obj.items() if k not in ['websocket_manager', 'job_id']}
+            elif isinstance(obj, list):
+                return [clean_result(item) for item in obj]
+            else:
+                try:
+                    json.dumps(obj)
+                    return obj
+                except (TypeError, ValueError):
+                    return str(obj)
+        
+        cleaned_result = clean_result(result)
+        
         update = {
             "type": "status_update",
             "data": {
                 "status": status,
                 "message": message,
                 "error": error,
-                "result": result
+                "result": cleaned_result
             }
         }
         #logger.info(f"Status: {status}, Message: {message}")

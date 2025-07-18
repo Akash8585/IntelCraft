@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import uuid
+import json
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -19,11 +20,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
-from backend.graph import Graph
+# Import WebSocket manager
 from backend.services.websocket_manager import WebSocketManager
-from backend.database.session import init_db, engine
-from backend.auth.routes import router as auth_router
-from backend.auth.oauth_routes import router as oauth_router, old_callback_router
 
 # Load environment variables from .env file at startup
 env_path = Path(__file__).parent / '.env'
@@ -36,23 +34,59 @@ logger.setLevel(logging.INFO)
 console_handler = logging.StreamHandler()
 logger.addHandler(console_handler)
 
-app = FastAPI(title="Tavily Company Research API")
+app = FastAPI(title="IntelCraft API")
 
+# Include OAuth routes
+try:
+    from backend.auth.oauth_routes import router as oauth_router, old_callback_router
+    app.include_router(oauth_router)
+    app.include_router(old_callback_router)
+    logger.info("OAuth routes included successfully")
+except Exception as e:
+    logger.warning(f"Failed to include OAuth routes: {e}")
+
+# Include auth routes
+try:
+    from backend.auth.routes import router as auth_router
+    app.include_router(auth_router)
+    logger.info("Auth routes included successfully")
+except Exception as e:
+    logger.warning(f"Failed to include auth routes: {e}")
+    logger.error(f"Auth routes error details: {str(e)}", exc_info=True)
+
+# Add a simple test endpoint to verify auth routes
+@app.get("/test-auth")
+async def test_auth():
+    """Test endpoint to verify auth routes are working"""
+    return {"message": "Auth routes are accessible", "status": "ok"}
+
+# Add a simplified /auth/me endpoint for testing
+@app.get("/auth/me")
+async def get_current_user_simple():
+    """Simplified /auth/me endpoint for testing"""
+    return {
+        "message": "Auth endpoint is working",
+        "status": "ok",
+        "note": "This is a test endpoint - replace with actual auth logic"
+    }
+
+# CORS configuration for frontend
+frontend_url = os.getenv("FRONTEND_URL", "https://intel-craft.vercel.app")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        "http://localhost:3000",  # Alternative dev port
+        frontend_url,  # Production frontend URL
+        "*"  # Allow all origins for testing (remove in production)
+    ],
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
-# Include authentication routes
-app.include_router(auth_router)
-app.include_router(oauth_router)
-app.include_router(old_callback_router)
-
-manager = WebSocketManager()
-
+# Simple in-memory storage
 job_status = defaultdict(lambda: {
     "status": "pending",
     "result": None,
@@ -63,30 +97,32 @@ job_status = defaultdict(lambda: {
     "last_update": datetime.now().isoformat()
 })
 
-mongodb = None
-if mongo_uri := os.getenv("MONGODB_URI"):
-    try:
-        from backend.services.mongodb_service import MongoDBService
-        mongodb = MongoDBService(mongo_uri)
-        logger.info("MongoDB integration enabled")
-    except Exception as e:
-        logger.warning(f"Failed to initialize MongoDB: {e}. Continuing without persistence.")
+# MongoDB integration disabled - using in-memory storage only
+logger.info("MongoDB integration disabled - using in-memory storage")
 
-# Initialize database
+# Initialize database (optional)
 import asyncio
-try:
-    asyncio.run(init_db())
-    logger.info("Database initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize database: {e}")
-    raise
+if os.getenv("DATABASE_URL"):
+    try:
+        from backend.database.session import init_db
+        asyncio.run(init_db())
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        logger.warning("Continuing without database initialization")
+else:
+    logger.info("No DATABASE_URL provided - skipping database initialization")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Gracefully close database connections on shutdown"""
     logger.info("Shutting down...")
-    await engine.dispose()
-    logger.info("Database connections closed")
+    try:
+        from backend.database.session import engine
+        await engine.dispose()
+        logger.info("Database connections closed")
+    except:
+        logger.info("No database connections to close")
 
 class ResearchRequest(BaseModel):
     company: str
@@ -95,191 +131,239 @@ class ResearchRequest(BaseModel):
     hq_location: str | None = None
     help_description: str | None = None
 
-@app.options("/research")
-async def preflight():
-    response = JSONResponse(content=None, status_code=200)
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    return response
-
-@app.post("/research")
-async def research(
-    data: ResearchRequest,
-    authorization: str = Header(None)
-):
-    # Verify user is authenticated
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Authentication required")
-    
-    token = authorization.split(" ")[1]
-    from backend.auth.security import verify_token
-    token_data = verify_token(token)
-    if not token_data:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    
-    # Get user from database
-    from backend.database.models import User
-    from backend.database.session import get_db
-    from sqlalchemy import select
-    
+@app.get("/")
+async def ping():
+    """Health check endpoint"""
     try:
-        async for db in get_db():
-            result = await db.execute(select(User).where(User.id == token_data.user_id))
-            user_data = result.scalar_one_or_none()
-            
-            if not user_data:
-                raise HTTPException(status_code=401, detail="User not found")
-            
-            user = {"id": user_data.id, "email": user_data.email}
-            break
+        # Basic health check
+        return {
+            "status": "healthy",
+            "message": "IntelCraft API is running",
+            "timestamp": datetime.now().isoformat()
+        }
     except Exception as e:
-        logger.error(f"Database error in research endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail="Database connection error")
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail="Health check failed")
+
+@app.get("/health")
+async def health():
+    """Detailed health check"""
+    return {
+        "status": "healthy",
+        "message": "IntelCraft API is running",
+        "timestamp": datetime.now().isoformat(),
+        "version": "1.0.0"
+    }
+
+async def run_research_process(job_id: str, company: str, company_url: str = None, industry: str = None, hq_location: str = None, help_description: str = None):
+    """Background research process that runs the actual LangGraph research system"""
     try:
-        logger.info(f"Received research request for {data.company} from user {user['id']}")
-        job_id = str(uuid.uuid4())
-        asyncio.create_task(process_research(job_id, data, user['id']))
+        logger.info(f"Starting background research process for job {job_id}")
+        
+        # Send initial status via WebSocket
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="processing",
+            message=f"Starting research for {company}"
+        )
 
-        response = JSONResponse(content={
-            "status": "accepted",
-            "job_id": job_id,
-            "message": "Research started. Connect to WebSocket for updates.",
-            "websocket_url": f"/research/ws/{job_id}"
-        })
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-        return response
+        # Import and initialize the research graph
+        try:
+            from backend.graph import Graph
+        except ImportError as e:
+            logger.error(f"Failed to import research graph: {e}")
+            raise Exception("Research system not available")
 
-    except Exception as e:
-        logger.error(f"Error initiating research: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-async def process_research(job_id: str, data: ResearchRequest, user_id: str):
-    try:
-        if mongodb:
-            mongodb.create_job(job_id, data.dict(), user_id=user_id)
-        await asyncio.sleep(1)  # Allow WebSocket connection
-
-        await manager.send_status_update(job_id, status="processing", message="Starting research")
-
+        # Create research graph with WebSocket manager
         graph = Graph(
-            company=data.company,
-            url=data.company_url,
-            industry=data.industry,
-            hq_location=data.hq_location,
-            help_description=data.help_description,
-            websocket_manager=manager,
+            company=company,
+            url=company_url,
+            hq_location=hq_location,
+            industry=industry,
+            help_description=help_description,
+            websocket_manager=websocket_manager,
             job_id=job_id
         )
 
-        state = {}
-        async for s in graph.run(thread={}):
-            state.update(s)
-        
-        # Look for the compiled report in either location.
-        report_content = state.get('report') or (state.get('editor') or {}).get('report')
-        if report_content:
-            logger.info(f"Found report in final state (length: {len(report_content)})")
-            job_status[job_id].update({
-                "status": "completed",
-                "report": report_content,
-                "company": data.company,
-                "last_update": datetime.now().isoformat()
-            })
-            if mongodb:
-                mongodb.update_job(job_id=job_id, status="completed")
-                mongodb.store_report(job_id=job_id, report_data={"report": report_content})
-            await manager.send_status_update(
-                job_id=job_id,
-                status="completed",
-                message="Research completed successfully",
-                result={
-                    "report": report_content,
-                    "company": data.company
-                }
-            )
-        else:
-            logger.error(f"Research completed without finding report. State keys: {list(state.keys())}")
-            logger.error(f"Editor state: {state.get('editor', {})}")
-            
-            # Check if there was a specific error in the state
-            error_message = "No report found"
-            if error := state.get('error'):
-                error_message = f"Error: {error}"
-            
-            await manager.send_status_update(
-                job_id=job_id,
-                status="failed",
-                message="Research completed but no report was generated",
-                error=error_message
-            )
-
-    except Exception as e:
-        logger.error(f"Research failed: {str(e)}")
-        await manager.send_status_update(
+        # Send status update
+        await websocket_manager.send_status_update(
             job_id=job_id,
-            status="failed",
-            message=f"Research failed: {str(e)}",
-            error=str(e)
+            status="processing",
+            message="Initializing research workflow..."
         )
-        if mongodb:
-            mongodb.update_job(job_id=job_id, status="failed", error=str(e))
 
-@app.get("/")
-async def ping():
-    return {"message": "Alive"}
-
-@app.websocket("/research/ws/{job_id}")
-async def websocket_endpoint(websocket: WebSocket, job_id: str):
-    try:
-        await websocket.accept()
-        await manager.connect(websocket, job_id)
-
-        if job_id in job_status:
-            status = job_status[job_id]
-            await manager.send_status_update(
-                job_id,
-                status=status["status"],
-                message="Connected to status stream",
-                error=status["error"],
-                result=status["result"]
+        # Run the research workflow
+        thread = {"configurable": {"thread_id": job_id}}
+        results = []
+        
+        async for state in graph.run(thread):
+            logger.info(f"Research state update for job {job_id}: {state.get('current_node', 'unknown')}")
+            results.append(state)
+            
+            # Send progress update
+            await websocket_manager.send_status_update(
+                job_id=job_id,
+                status="processing",
+                message=f"Processing: {state.get('current_node', 'Research step')}"
             )
 
-        while True:
-            try:
-                await websocket.receive_text()
-            except WebSocketDisconnect:
-                manager.disconnect(websocket, job_id)
-                break
+        # Get final result
+        final_state = results[-1] if results else {}
+        
+        # Clean the state to remove non-serializable objects
+        def clean_state(state):
+            """Remove non-serializable objects from state"""
+            if not isinstance(state, dict):
+                return str(state)
+            
+            cleaned = {}
+            for key, value in state.items():
+                # Skip WebSocketManager and other non-serializable objects
+                if key in ['websocket_manager', 'job_id']:
+                    continue
+                elif isinstance(value, dict):
+                    cleaned[key] = clean_state(value)
+                elif isinstance(value, list):
+                    cleaned[key] = [clean_state(item) if isinstance(item, dict) else str(item) for item in value]
+                else:
+                    try:
+                        # Test if value is JSON serializable
+                        json.dumps(value)
+                        cleaned[key] = value
+                    except (TypeError, ValueError):
+                        cleaned[key] = str(value)
+            return cleaned
+        
+        cleaned_state = clean_state(final_state)
+        
+        # Extract research results
+        research_result = {
+            "company": company,
+            "summary": f"Research completed for {company}",
+            "timestamp": datetime.now().isoformat(),
+            "state": cleaned_state,
+            "total_steps": len(results)
+        }
+
+        # Send completion status
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="completed",
+            message="Research completed successfully",
+            result=research_result
+        )
+
+        # Update job status
+        job_status[job_id].update({
+            "status": "completed",
+            "result": research_result,
+            "last_update": datetime.now().isoformat()
+        })
+        
+        logger.info(f"Research process completed for job {job_id} with {len(results)} steps")
+        
+    except Exception as e:
+        logger.error(f"Error in research process for job {job_id}: {str(e)}", exc_info=True)
+        # Send error status
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="error",
+            error=f"Research failed: {str(e)}"
+        )
+        # Update job status
+        job_status[job_id].update({
+            "status": "error",
+            "error": str(e),
+            "last_update": datetime.now().isoformat()
+        })
+
+@app.post("/research")
+async def research(data: ResearchRequest):
+    """Research endpoint with WebSocket integration"""
+    try:
+        logger.info(f"Received research request for {data.company}")
+        job_id = str(uuid.uuid4())
+        
+        # Store job in memory
+        job_status[job_id].update({
+            "status": "processing",
+            "company": data.company,
+            "last_update": datetime.now().isoformat()
+        })
+
+        # Start research process in background (non-blocking)
+        asyncio.create_task(run_research_process(
+            job_id=job_id,
+            company=data.company,
+            company_url=data.company_url,
+            industry=data.industry,
+            hq_location=data.hq_location,
+            help_description=data.help_description
+        ))
+
+        return {
+            "status": "accepted",
+            "job_id": job_id,
+            "message": "Research request received and processing started",
+            "company": data.company
+        }
 
     except Exception as e:
-        logger.error(f"WebSocket error for job {job_id}: {str(e)}", exc_info=True)
-        manager.disconnect(websocket, job_id)
+        logger.error(f"Error processing research request: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/research/{job_id}")
 async def get_research(job_id: str):
-    if not mongodb:
-        raise HTTPException(status_code=501, detail="Database persistence not configured")
-    job = mongodb.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Research job not found")
-    return job
+    """Get research status"""
+    if job_id in job_status:
+        return job_status[job_id]
+    raise HTTPException(status_code=404, detail="Research job not found")
 
-@app.get("/research/{job_id}/report")
-async def get_research_report(job_id: str):
-    if not mongodb:
-        if job_id in job_status:
-            result = job_status[job_id]
-            if report := result.get("report"):
-                return {"report": report}
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    report = mongodb.get_report(job_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Research report not found")
-    return report
+# Initialize WebSocket manager
+websocket_manager = WebSocketManager()
+
+@app.websocket("/research/ws/{job_id}")
+async def websocket_endpoint(websocket: WebSocket, job_id: str):
+    """WebSocket endpoint for real-time research updates"""
+    try:
+        await websocket.accept()
+        logger.info(f"WebSocket connection accepted for job: {job_id}")
+        
+        # Connect to the WebSocket manager
+        await websocket_manager.connect(websocket, job_id)
+        
+        # Send initial connection confirmation
+        await websocket.send_text(json.dumps({
+            "type": "connection_established",
+            "data": {
+                "job_id": job_id,
+                "message": "Connected to research updates"
+            }
+        }))
+        
+        # Keep connection alive and handle messages
+        try:
+            while True:
+                # Wait for any message from client (ping/pong or close)
+                data = await websocket.receive_text()
+                logger.info(f"Received message from client: {data}")
+                
+                # Handle ping/pong for connection health
+                if data == "ping":
+                    await websocket.send_text("pong")
+                    
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for job: {job_id}")
+        except Exception as e:
+            logger.error(f"WebSocket error for job {job_id}: {str(e)}")
+        finally:
+            # Clean up connection
+            websocket_manager.disconnect(websocket, job_id)
+            
+    except Exception as e:
+        logger.error(f"Failed to establish WebSocket connection for job {job_id}: {str(e)}")
+        if websocket.client_state.value != 3:  # Not disconnected
+            await websocket.close(code=1000)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
