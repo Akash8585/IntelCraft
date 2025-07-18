@@ -14,7 +14,8 @@ class GoogleOAuth:
     def __init__(self):
         self.client_id = os.getenv("GOOGLE_CLIENT_ID")
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET")
-        self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "https://intelcraft.onrender.com/oauth/google/callback")
+        # TEMPORARY: Hardcode the correct production redirect URI
+        self.redirect_uri = "https://intelcraft.onrender.com/oauth/google/callback"
 
         if not self.client_id or not self.client_secret:
             raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables are required")
@@ -29,6 +30,11 @@ class GoogleOAuth:
             "access_type": "offline",
             "prompt": "consent",
         }
+        
+        # Debug logging
+        print(f"Google OAuth redirect_uri: {self.redirect_uri}")
+        print(f"Google OAuth client_id: {self.client_id[:10]}...")
+        
         query_string = "&".join([f"{k}={v}" for k, v in params.items()])
         return f"https://accounts.google.com/o/oauth2/v2/auth?{query_string}"
 
