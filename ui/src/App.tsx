@@ -19,15 +19,11 @@ import {ResearchOutput, DocCount,DocCounts, EnrichmentCounts, ResearchState, Res
 import { checkForFinalReport } from './utils/handlers';
 import { colorAnimation, dmSansStyle, glassStyle, fadeInAnimation } from './styles';
 import { apiRequest } from './utils/api';
+import { API_BASE_URL, WS_BASE_URL } from './utils/constants';
 
-const API_URL = import.meta.env.VITE_API_URL;
-const WS_URL = import.meta.env.VITE_WS_URL;
-
-if (!API_URL || !WS_URL) {
-  throw new Error(
-    "Environment variables VITE_API_URL and VITE_WS_URL must be set"
-  );
-}
+// Use centralized API configuration
+const API_URL = API_BASE_URL;
+const WS_URL = WS_BASE_URL;
 
 // Add styles to document head
 const colorStyle = document.createElement('style');

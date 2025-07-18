@@ -4,6 +4,9 @@ export const BACKEND_URL = 'https://intelcraft.onrender.com';
 // You can also use environment variables
 export const API_BASE_URL = import.meta.env.VITE_API_URL || BACKEND_URL;
 
+// WebSocket URL (convert HTTP/HTTPS to WS/WSS)
+export const WS_BASE_URL = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
+
 // Force new deployment - API configuration updated
 
 // WebSocket Configuration
