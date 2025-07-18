@@ -1,14 +1,11 @@
-[phases.setup]
-nixPkgs = ["python311", "python311Packages.pip"]
-
 [phases.install]
-cmds = ["python -m venv /opt/venv --without-pip", "source /opt/venv/bin/activate && curl https://bootstrap.pypa.io/get-pip.py | python", "source /opt/venv/bin/activate && pip install -r requirements.txt"]
+cmds = ["pip install -r requirements.txt"]
 
 [phases.build]
 cmds = ["echo 'Build complete'"]
 
 [start]
-cmd = "source /opt/venv/bin/activate && python -m uvicorn application:app --host 0.0.0.0 --port $PORT"
+cmd = "python -m uvicorn application:app --host 0.0.0.0 --port $PORT"
 
 [variables]
 PYTHON_VERSION = "3.11" 
