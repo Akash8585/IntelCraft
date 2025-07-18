@@ -4,6 +4,8 @@ export const BACKEND_URL = 'https://intelcraft.onrender.com';
 // You can also use environment variables
 export const API_BASE_URL = import.meta.env.VITE_API_URL || BACKEND_URL;
 
+// Force new deployment - API configuration updated
+
 // WebSocket Configuration
 export const MAX_RECONNECT_ATTEMPTS = 3;
 export const RECONNECT_DELAY = 2000; // 2 seconds
