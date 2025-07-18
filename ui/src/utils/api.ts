@@ -1,6 +1,5 @@
 import { useCustomAuthStore } from '../stores/customAuth';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE_URL } from './constants';
 
 export const apiRequest = async (
   endpoint: string,
@@ -38,14 +37,29 @@ export const researchCompany = async (researchData: {
   hq_location?: string;
   help_description?: string;
 }) => {
-  const response = await apiRequest('/research', {
+  // For the simplified backend, we don't need authentication
+  const response = await fetch(`${API_BASE_URL}/research`, {
     method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(researchData),
   });
 
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.detail || 'Research request failed');
+  }
+
+  return response.json();
+};
+
+export const getResearchStatus = async (jobId: string) => {
+  const response = await fetch(`${API_BASE_URL}/research/${jobId}`);
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || 'Failed to get research status');
   }
 
   return response.json();

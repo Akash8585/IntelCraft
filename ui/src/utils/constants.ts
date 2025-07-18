@@ -1,6 +1,8 @@
-// API and WebSocket URLs
-export const API_URL = import.meta.env.VITE_API_URL;
-export const WS_URL = import.meta.env.VITE_WS_URL;
+// Update this URL to your actual Render app URL
+export const BACKEND_URL = 'https://intelcraft.onrender.com';
+
+// You can also use environment variables
+export const API_BASE_URL = import.meta.env.VITE_API_URL || BACKEND_URL;
 
 // WebSocket Configuration
 export const MAX_RECONNECT_ATTEMPTS = 3;
