@@ -456,44 +456,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGenerateResearch }) => {
         <footer className="relative">
           <div className="absolute inset-0 bg-gray-900/5 border-t border-gray-200/50"></div>
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="grid md:grid-cols-4 gap-8">
-              <div className="md:col-span-2">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
-                    <Building2 className="w-6 h-6 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900">IntelCraft</h3>
-                    <p className="text-sm text-gray-600">Your AI outreach agent</p>
-                  </div>
+            <div className="text-center">
+              <div className="flex items-center justify-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center">
+                  <Building2 className="w-6 h-6 text-white" />
                 </div>
-                <p className="text-gray-600 mb-4 max-w-md">
-                  Transform your business outreach with AI-powered research and personalized content generation.
-                </p>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">IntelCraft</h3>
+                  <p className="text-sm text-gray-600">Your AI outreach agent</p>
+                </div>
               </div>
-              
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-4">Product</h4>
-                <ul className="space-y-2 text-gray-600">
-                  <li><a href="#" className="hover:text-gray-900 transition-colors">Features</a></li>
-                  <li><a href="#" className="hover:text-gray-900 transition-colors">Pricing</a></li>
-                  <li><a href="#" className="hover:text-gray-900 transition-colors">API</a></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-4">Company</h4>
-                <ul className="space-y-2 text-gray-600">
-                  <li><a href="#" className="hover:text-gray-900 transition-colors">About</a></li>
-                  <li><a href="#" className="hover:text-gray-900 transition-colors">Blog</a></li>
-                  <li><a href="#" className="hover:text-gray-900 transition-colors">Contact</a></li>
-                </ul>
-              </div>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                Transform your business outreach with AI-powered research and personalized content generation.
+              </p>
             </div>
             
-            <div className="border-t border-gray-200 mt-8 pt-8 text-center">
+            <div className="border-t border-gray-200 pt-8 text-center">
               <p className="text-gray-600">
-                © 2024 IntelCraft. All rights reserved. Powered by advanced AI research technology.
+                © 2025 IntelCraft. All rights reserved. Powered by advanced AI research technology.
               </p>
             </div>
           </div>
