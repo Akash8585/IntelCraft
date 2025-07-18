@@ -203,10 +203,8 @@ function AppContent() {
   const connectWebSocket = (jobId: string) => {
     console.log("Initializing WebSocket connection for job:", jobId);
     
-    // Construct WebSocket URL based on current protocol
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = WS_URL.replace(/^https?:\/\//, '').replace(/^ws:\/\//, '').replace(/^wss:\/\//, ''); // Remove any protocol prefixes
-    const wsUrl = `${protocol}//${host}/research/ws/${jobId}`;
+    // Use the WS_URL directly since it's already configured correctly
+    const wsUrl = `${WS_URL}/research/ws/${jobId}`;
     
     console.log("Connecting to WebSocket URL:", wsUrl);
     
