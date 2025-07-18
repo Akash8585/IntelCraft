@@ -40,6 +40,14 @@ try:
 except Exception as e:
     logger.warning(f"Failed to include OAuth routes: {e}")
 
+# Include auth routes
+try:
+    from backend.auth.routes import router as auth_router
+    app.include_router(auth_router)
+    logger.info("Auth routes included successfully")
+except Exception as e:
+    logger.warning(f"Failed to include auth routes: {e}")
+
 # CORS configuration for frontend
 app.add_middleware(
     CORSMiddleware,
