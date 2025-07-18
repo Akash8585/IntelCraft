@@ -26,6 +26,12 @@ async def google_authorize():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google OAuth not configured"
         )
+    
+    # Debug logging
+    frontend_url = os.getenv("FRONTEND_URL", "https://intel-craft.vercel.app")
+    print(f"Frontend URL configured: {frontend_url}")
+    print(f"Google redirect URI: {google_oauth.redirect_uri}")
+    
     auth_url = google_oauth.get_authorization_url()
     return {"auth_url": auth_url}
 
