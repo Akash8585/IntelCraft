@@ -67,12 +67,13 @@ async def get_current_user_simple():
     }
 
 # CORS configuration for frontend
+frontend_url = os.getenv("FRONTEND_URL", "https://intel-craft.vercel.app")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite dev server
         "http://localhost:3000",  # Alternative dev port
-        "https://your-vercel-domain.vercel.app",  # Replace with your actual Vercel domain
+        frontend_url,  # Production frontend URL
         "*"  # Allow all origins for testing (remove in production)
     ],
     allow_credentials=True,
