@@ -53,7 +53,7 @@ export const useCustomAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           // Get the auth URL from the backend
-          const response = await fetch(`${API_BASE_URL}/oauth/google/authorize`);
+          const response = await fetch(`${API_BASE_URL}/api/auth/google/authorize`);
           
           if (!response.ok) {
             throw new Error(`Backend error: ${response.status}`);
