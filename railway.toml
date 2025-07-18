@@ -1,7 +1,5 @@
 [build]
-builder = "nixpacks"
+  root = "."
 
 [deploy]
-startCommand = "python -m uvicorn application:app --host 0.0.0.0 --port 8000"
-healthcheckPath = "/"
-healthcheckTimeout = 300 
+  startCommand = "uvicorn application:app --host 0.0.0.0 --port 8000"
