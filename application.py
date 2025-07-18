@@ -155,25 +155,16 @@ async def health():
         "version": "1.0.0"
     }
 
-@app.post("/research")
-async def research(data: ResearchRequest):
-    """Research endpoint with WebSocket integration"""
+async def run_research_process(job_id: str, company: str):
+    """Background research process that runs asynchronously"""
     try:
-        logger.info(f"Received research request for {data.company}")
-        job_id = str(uuid.uuid4())
+        logger.info(f"Starting background research process for job {job_id}")
         
-        # Store job in memory
-        job_status[job_id].update({
-            "status": "processing",
-            "company": data.company,
-            "last_update": datetime.now().isoformat()
-        })
-
         # Send initial status via WebSocket
         await websocket_manager.send_status_update(
             job_id=job_id,
             status="processing",
-            message=f"Starting research for {data.company}"
+            message=f"Starting research for {company}"
         )
 
         # Simulate research progress (replace with actual research logic)
@@ -197,8 +188,8 @@ async def research(data: ResearchRequest):
             status="completed",
             message="Research completed successfully",
             result={
-                "company": data.company,
-                "summary": f"Research completed for {data.company}",
+                "company": company,
+                "summary": f"Research completed for {company}",
                 "timestamp": datetime.now().isoformat()
             }
         )
@@ -207,11 +198,45 @@ async def research(data: ResearchRequest):
         job_status[job_id].update({
             "status": "completed",
             "result": {
-                "company": data.company,
-                "summary": f"Research completed for {data.company}"
+                "company": company,
+                "summary": f"Research completed for {company}"
             },
             "last_update": datetime.now().isoformat()
         })
+        
+        logger.info(f"Research process completed for job {job_id}")
+        
+    except Exception as e:
+        logger.error(f"Error in research process for job {job_id}: {str(e)}", exc_info=True)
+        # Send error status
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="error",
+            error=f"Research failed: {str(e)}"
+        )
+        # Update job status
+        job_status[job_id].update({
+            "status": "error",
+            "error": str(e),
+            "last_update": datetime.now().isoformat()
+        })
+
+@app.post("/research")
+async def research(data: ResearchRequest):
+    """Research endpoint with WebSocket integration"""
+    try:
+        logger.info(f"Received research request for {data.company}")
+        job_id = str(uuid.uuid4())
+        
+        # Store job in memory
+        job_status[job_id].update({
+            "status": "processing",
+            "company": data.company,
+            "last_update": datetime.now().isoformat()
+        })
+
+        # Start research process in background (non-blocking)
+        asyncio.create_task(run_research_process(job_id, data.company))
 
         return {
             "status": "accepted",
