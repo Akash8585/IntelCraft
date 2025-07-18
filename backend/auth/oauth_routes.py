@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException, status, Request, Depends
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,7 +49,7 @@ async def google_callback(code: str, request: Request, db: AsyncSession = Depend
             user, token, session_token = await google_oauth.authenticate_user(code, db)
             
             # Success - redirect to frontend with tokens
-            frontend_url = "http://localhost:5174"
+            frontend_url = os.getenv("FRONTEND_URL", "https://intel-craft.vercel.app")
             redirect_url = f"{frontend_url}/auth/callback?access_token={token.access_token}&session_token={session_token}"
 
             print(f"Google OAuth successful for user: {user.email} (attempt {attempt + 1})")
@@ -75,7 +76,7 @@ async def google_callback(code: str, request: Request, db: AsyncSession = Depend
             else:
                 # All attempts failed, redirect to error page
                 print(f"Google OAuth failed after {max_retries} attempts")
-                frontend_url = "http://localhost:5174"
+                frontend_url = os.getenv("FRONTEND_URL", "https://intel-craft.vercel.app")
                 error_url = f"{frontend_url}/auth/error?message=Authentication failed after multiple attempts"
                 return RedirectResponse(url=error_url)
 
