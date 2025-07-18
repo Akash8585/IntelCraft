@@ -64,13 +64,8 @@ job_status = defaultdict(lambda: {
 })
 
 mongodb = None
-if mongo_uri := os.getenv("MONGODB_URI"):
-    try:
-        from backend.services.mongodb_service import MongoDBService
-        mongodb = MongoDBService(mongo_uri)
-        logger.info("MongoDB integration enabled")
-    except Exception as e:
-        logger.warning(f"Failed to initialize MongoDB: {e}. Continuing without persistence.")
+# MongoDB integration disabled - using in-memory storage only
+logger.info("MongoDB integration disabled - using in-memory storage")
 
 # Initialize database
 import asyncio
@@ -158,8 +153,12 @@ async def research(
 
 async def process_research(job_id: str, data: ResearchRequest, user_id: str):
     try:
-        if mongodb:
-            mongodb.create_job(job_id, data.dict(), user_id=user_id)
+        # Store job in memory (MongoDB disabled)
+        job_status[job_id].update({
+            "status": "processing",
+            "company": data.company,
+            "last_update": datetime.now().isoformat()
+        })
         await asyncio.sleep(1)  # Allow WebSocket connection
 
         await manager.send_status_update(job_id, status="processing", message="Starting research")
@@ -188,9 +187,7 @@ async def process_research(job_id: str, data: ResearchRequest, user_id: str):
                 "company": data.company,
                 "last_update": datetime.now().isoformat()
             })
-            if mongodb:
-                mongodb.update_job(job_id=job_id, status="completed")
-                mongodb.store_report(job_id=job_id, report_data={"report": report_content})
+            # Update job status in memory (MongoDB disabled)
             await manager.send_status_update(
                 job_id=job_id,
                 status="completed",
@@ -224,8 +221,7 @@ async def process_research(job_id: str, data: ResearchRequest, user_id: str):
             message=f"Research failed: {str(e)}",
             error=str(e)
         )
-        if mongodb:
-            mongodb.update_job(job_id=job_id, status="failed", error=str(e))
+        # Update job status in memory (MongoDB disabled)
 @app.get("/")
 async def ping():
     return {"message": "Alive"}
@@ -259,26 +255,17 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
 
 @app.get("/research/{job_id}")
 async def get_research(job_id: str):
-    if not mongodb:
-        raise HTTPException(status_code=501, detail="Database persistence not configured")
-    job = mongodb.get_job(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Research job not found")
-    return job
+    if job_id in job_status:
+        return job_status[job_id]
+    raise HTTPException(status_code=404, detail="Research job not found")
 
 @app.get("/research/{job_id}/report")
 async def get_research_report(job_id: str):
-    if not mongodb:
-        if job_id in job_status:
-            result = job_status[job_id]
-            if report := result.get("report"):
-                return {"report": report}
-        raise HTTPException(status_code=404, detail="Report not found")
-    
-    report = mongodb.get_report(job_id)
-    if not report:
-        raise HTTPException(status_code=404, detail="Research report not found")
-    return report
+    if job_id in job_status:
+        result = job_status[job_id]
+        if report := result.get("report"):
+            return {"report": report}
+    raise HTTPException(status_code=404, detail="Report not found")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
