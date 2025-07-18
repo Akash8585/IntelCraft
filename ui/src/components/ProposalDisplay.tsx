@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from 'rehype-raw';
 import remarkGfm from 'remark-gfm';
-import { Check, Copy, FileText, Loader2, Download } from 'lucide-react';
+import { Check, Copy, FileText, Loader2 } from 'lucide-react';
 import { ProposalDisplayProps } from '../types';
 
 const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
@@ -28,19 +28,7 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
     }
   };
 
-  const handleDownloadAsMarkdown = () => {
-    if (!proposal) return;
-    
-    const blob = new Blob([proposal], { type: 'text/markdown' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${company || 'partnership'}_proposal.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-  };
+
 
   // Show loading state when generating
   if (isGenerating) {
@@ -90,32 +78,22 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           </div>
         </div>
         
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={handleCopyToClipboard}
-            className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[#468BFF] text-white hover:bg-[#8FBCFA] transition-all duration-200 text-sm font-medium"
-          >
-            {isCopied ? (
-              <>
-                <Check className="h-4 w-4 mr-1" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4 mr-1" />
-                Copy
-              </>
-            )}
-          </button>
-          
-          <button
-            onClick={handleDownloadAsMarkdown}
-            className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[#8B5CF6] text-white hover:bg-[#A78BFA] transition-all duration-200 text-sm font-medium"
-          >
-            <Download className="h-4 w-4 mr-1" />
-            Download
-          </button>
-        </div>
+        <button
+          onClick={handleCopyToClipboard}
+          className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[#468BFF] text-white hover:bg-[#8FBCFA] transition-all duration-200 text-sm font-medium"
+        >
+          {isCopied ? (
+            <>
+              <Check className="h-4 w-4 mr-1" />
+              Copied!
+            </>
+          ) : (
+            <>
+              <Copy className="h-4 w-4 mr-1" />
+              Copy
+            </>
+          )}
+        </button>
       </div>
 
       {/* Proposal content */}

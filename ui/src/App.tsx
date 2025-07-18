@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import Header from './components/Header';
-import DashboardHeader from './components/DashboardHeader';
+import UserInfo from './components/UserInfo';
 import ResearchBriefings from './components/ResearchBriefings';
 import CurationExtraction from './components/CurationExtraction';
 import ResearchQueries from './components/ResearchQueries';
@@ -12,7 +12,6 @@ import ResearchForm from './components/ResearchForm';
 import EmailDisplay from './components/EmailDisplay';
 import ProposalDisplay from './components/ProposalDisplay';
 import LandingPage from './components/LandingPage';
-import Sidebar from './components/Sidebar';
 import { AuthPage } from './components/Auth/AuthPage';
 import { AuthCallback } from './components/Auth/AuthCallback';
 import { useCustomAuthStore } from './stores/customAuth';
@@ -145,7 +144,6 @@ function AppContent() {
   
   // Research session management
   const [currentResearchId, setCurrentResearchId] = useState<string | null>(null);
-  const [sidebarExpanded, setSidebarExpanded] = useState(true);
   
   // Add useEffect for color cycling
   useEffect(() => {
@@ -356,11 +354,7 @@ function AppContent() {
           });
           setHasFinalReport(true);
           
-          // Update research session status
-          if (currentResearchId) {
-            const summary = statusData.result.report ? statusData.result.report.substring(0, 100) + '...' : undefined;
-            updateResearchSessionStatus(currentResearchId, 'completed', summary);
-          }
+          // Research completed successfully
           
           // Clear polling interval if it exists
           if (pollingIntervalRef.current) {
@@ -659,10 +653,7 @@ function AppContent() {
         ) {
           setError(statusData.error || statusData.message || "Research failed");
           
-          // Update research session status
-          if (currentResearchId) {
-            updateResearchSessionStatus(currentResearchId, 'failed');
-          }
+          // Research failed
           
           if (statusData.status === "website_error" && statusData.result?.continue_research) {
           } else {
@@ -714,7 +705,7 @@ function AppContent() {
     setHasScrolledToStatus(false); // Reset scroll flag when starting new research
 
     // Save research session
-    const researchId = saveResearchSession(formData.companyName);
+    const researchId = generateResearchId();
 
     try {
       const url = `${API_URL}/research`;
@@ -761,10 +752,7 @@ function AppContent() {
       setError(err instanceof Error ? err.message : "Failed to start research");
       setIsResearching(false);
       
-      // Update research session status if it was created
-      if (currentResearchId) {
-        updateResearchSessionStatus(currentResearchId, 'failed');
-      }
+      // Research failed
     }
   };
 
@@ -911,46 +899,17 @@ function AppContent() {
     navigate('/auth');
   };
 
-  // Handle research session selection
-  const handleSelectResearch = (researchId: string) => {
-    setCurrentResearchId(researchId);
-    // TODO: Load the selected research data
-    console.log('Selected research:', researchId);
-  };
-
   // Handle new research
   const handleNewResearch = () => {
     setCurrentResearchId(null);
     resetResearch();
   };
 
-  // Save research session when starting new research
-  const saveResearchSession = (companyName: string) => {
+  // Generate research ID when starting new research
+  const generateResearchId = () => {
     const researchId = `research_${Date.now()}`;
-    const session = {
-      id: researchId,
-      companyName,
-      timestamp: new Date().toISOString(),
-      status: 'in_progress' as const,
-    };
-    
-    const existingSessions = JSON.parse(localStorage.getItem('researchSessions') || '[]');
-    const updatedSessions = [session, ...existingSessions];
-    localStorage.setItem('researchSessions', JSON.stringify(updatedSessions));
-    
     setCurrentResearchId(researchId);
     return researchId;
-  };
-
-  // Update research session status
-  const updateResearchSessionStatus = (researchId: string, status: 'completed' | 'failed', summary?: string) => {
-    const existingSessions = JSON.parse(localStorage.getItem('researchSessions') || '[]');
-    const updatedSessions = existingSessions.map((session: any) => 
-      session.id === researchId 
-        ? { ...session, status, summary }
-        : session
-    );
-    localStorage.setItem('researchSessions', JSON.stringify(updatedSessions));
   };
 
   if (isLoading) {
@@ -978,27 +937,21 @@ function AppContent() {
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-gray-50 to-white relative">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_1px_1px,rgba(70,139,255,0.35)_1px,transparent_0)] bg-[length:24px_24px] bg-center"></div>
       
-      {/* Sidebar */}
-      <Sidebar
-        onSelectResearch={handleSelectResearch}
-        onNewResearch={handleNewResearch}
-        currentResearchId={currentResearchId || undefined}
-        glassStyle={glassStyle.card}
-      />
+      {/* User Info */}
+      <UserInfo user={user} onSignOut={signOut} onNewResearch={handleNewResearch} />
 
       {/* Main Content */}
-      <div 
-        className={`transition-all duration-300 ease-in-out ${sidebarExpanded ? '' : 'ml-18'} p-8 pt-16`}
-        style={{ marginLeft: sidebarExpanded ? '280px' : '72px' }}
-      >
+      <div className="p-8 pt-20">
         <div className="max-w-5xl mx-auto space-y-8 relative">
-          {/* Dashboard Header */}
-          <DashboardHeader 
-            user={user} 
-            onSignOut={signOut} 
-            glassStyle={glassStyle.card} 
-            sidebarExpanded={sidebarExpanded}
-          />
+          {/* IntelCraft Branding */}
+          <div className="text-center mb-8">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent mb-2">
+              IntelCraft
+            </h1>
+            <p className="text-lg text-gray-600 font-medium">
+              Your AI outreach agent.
+            </p>
+          </div>
 
           {/* Form Section */}
           <ResearchForm 

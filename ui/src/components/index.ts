@@ -5,4 +5,5 @@ export { default as ResearchStatus } from './ResearchStatus';
 export { default as ResearchReport } from './ResearchReport';
 export { default as ResearchForm } from './ResearchForm';
 export { default as EmailDisplay } from './EmailDisplay';
-export { default as ProposalDisplay } from './ProposalDisplay'; 
+export { default as ProposalDisplay } from './ProposalDisplay';
+export { default as UserInfo } from './UserInfo'; 
