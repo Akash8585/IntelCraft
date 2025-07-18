@@ -15,10 +15,10 @@ export const AuthCallback: React.FC = () => {
       handleCallback(accessToken, sessionToken);
       
       // Redirect to dashboard
-      window.location.href = '/';
+      window.location.href = '/dashboard';
     } else {
       // No tokens, redirect to login
-      window.location.href = '/';
+      window.location.href = '/auth';
     }
   }, [handleCallback]);
 
