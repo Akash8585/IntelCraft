@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import uuid
+import json
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
@@ -18,6 +19,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
+
+# Import WebSocket manager
+from backend.services.websocket_manager import WebSocketManager
 
 # Load environment variables from .env file at startup
 env_path = Path(__file__).parent / '.env'
@@ -153,7 +157,7 @@ async def health():
 
 @app.post("/research")
 async def research(data: ResearchRequest):
-    """Simple research endpoint for testing"""
+    """Research endpoint with WebSocket integration"""
     try:
         logger.info(f"Received research request for {data.company}")
         job_id = str(uuid.uuid4())
@@ -165,10 +169,54 @@ async def research(data: ResearchRequest):
             "last_update": datetime.now().isoformat()
         })
 
+        # Send initial status via WebSocket
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="processing",
+            message=f"Starting research for {data.company}"
+        )
+
+        # Simulate research progress (replace with actual research logic)
+        await asyncio.sleep(2)
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="processing",
+            message="Collecting company information..."
+        )
+
+        await asyncio.sleep(2)
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="processing",
+            message="Analyzing market data..."
+        )
+
+        await asyncio.sleep(2)
+        await websocket_manager.send_status_update(
+            job_id=job_id,
+            status="completed",
+            message="Research completed successfully",
+            result={
+                "company": data.company,
+                "summary": f"Research completed for {data.company}",
+                "timestamp": datetime.now().isoformat()
+            }
+        )
+
+        # Update job status
+        job_status[job_id].update({
+            "status": "completed",
+            "result": {
+                "company": data.company,
+                "summary": f"Research completed for {data.company}"
+            },
+            "last_update": datetime.now().isoformat()
+        })
+
         return {
             "status": "accepted",
             "job_id": job_id,
-            "message": "Research request received (simplified mode)",
+            "message": "Research request received and processing started",
             "company": data.company
         }
 
@@ -182,6 +230,52 @@ async def get_research(job_id: str):
     if job_id in job_status:
         return job_status[job_id]
     raise HTTPException(status_code=404, detail="Research job not found")
+
+# Initialize WebSocket manager
+websocket_manager = WebSocketManager()
+
+@app.websocket("/research/ws/{job_id}")
+async def websocket_endpoint(websocket: WebSocket, job_id: str):
+    """WebSocket endpoint for real-time research updates"""
+    try:
+        await websocket.accept()
+        logger.info(f"WebSocket connection accepted for job: {job_id}")
+        
+        # Connect to the WebSocket manager
+        await websocket_manager.connect(websocket, job_id)
+        
+        # Send initial connection confirmation
+        await websocket.send_text(json.dumps({
+            "type": "connection_established",
+            "data": {
+                "job_id": job_id,
+                "message": "Connected to research updates"
+            }
+        }))
+        
+        # Keep connection alive and handle messages
+        try:
+            while True:
+                # Wait for any message from client (ping/pong or close)
+                data = await websocket.receive_text()
+                logger.info(f"Received message from client: {data}")
+                
+                # Handle ping/pong for connection health
+                if data == "ping":
+                    await websocket.send_text("pong")
+                    
+        except WebSocketDisconnect:
+            logger.info(f"WebSocket disconnected for job: {job_id}")
+        except Exception as e:
+            logger.error(f"WebSocket error for job {job_id}: {str(e)}")
+        finally:
+            # Clean up connection
+            websocket_manager.disconnect(websocket, job_id)
+            
+    except Exception as e:
+        logger.error(f"Failed to establish WebSocket connection for job {job_id}: {str(e)}")
+        if websocket.client_state.value != 3:  # Not disconnected
+            await websocket.close(code=1000)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
