@@ -213,6 +213,19 @@ function AppContent() {
     ws.onopen = () => {
       console.log("WebSocket connection established for job:", jobId);
       setReconnectAttempts(0);
+      wsRef.current = ws;
+      
+      // Start ping/pong to keep connection alive
+      const pingInterval = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send("ping");
+        } else {
+          clearInterval(pingInterval);
+        }
+      }, 30000); // Send ping every 30 seconds
+      
+      // Store ping interval for cleanup
+      ws.pingInterval = pingInterval;
     };
 
     ws.onclose = (event) => {
@@ -223,6 +236,14 @@ function AppContent() {
         wasClean: event.wasClean,
         timestamp: new Date().toISOString()
       });
+
+      // Clean up ping interval
+      if (ws.pingInterval) {
+        clearInterval(ws.pingInterval);
+      }
+      
+      // Store the WebSocket reference for cleanup
+      wsRef.current = null;
 
       if (isResearching && !hasFinalReport) {
         // Start polling for final report

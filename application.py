@@ -196,16 +196,24 @@ async def run_research_process(job_id: str, company: str, company_url: str = Non
         thread = {"configurable": {"thread_id": job_id}}
         results = []
         
-        async for state in graph.run(thread):
-            logger.info(f"Research state update for job {job_id}: {state.get('current_node', 'unknown')}")
-            results.append(state)
-            
-            # Send progress update
-            await websocket_manager.send_status_update(
-                job_id=job_id,
-                status="processing",
-                message=f"Processing: {state.get('current_node', 'Research step')}"
-            )
+        try:
+            async for state in graph.run(thread):
+                logger.info(f"Research state update for job {job_id}: {state.get('current_node', 'unknown')}")
+                results.append(state)
+                
+                # Send progress update
+                await websocket_manager.send_status_update(
+                    job_id=job_id,
+                    status="processing",
+                    message=f"Processing: {state.get('current_node', 'Research step')}"
+                )
+                
+                # Add small delay to ensure WebSocket messages are sent
+                await asyncio.sleep(0.1)
+                
+        except Exception as e:
+            logger.error(f"Error during research workflow for job {job_id}: {str(e)}")
+            raise e
 
         # Get final result
         final_state = results[-1] if results else {}
@@ -245,6 +253,9 @@ async def run_research_process(job_id: str, company: str, company_url: str = Non
             "total_steps": len(results)
         }
 
+        # Add delay to ensure WebSocket connection is stable before sending completion
+        await asyncio.sleep(0.5)
+        
         # Send completion status
         await websocket_manager.send_status_update(
             job_id=job_id,
@@ -252,6 +263,9 @@ async def run_research_process(job_id: str, company: str, company_url: str = Non
             message="Research completed successfully",
             result=research_result
         )
+        
+        # Add another delay to ensure completion message is sent
+        await asyncio.sleep(0.5)
 
         # Update job status
         job_status[job_id].update({
