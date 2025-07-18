@@ -67,14 +67,17 @@ mongodb = None
 # MongoDB integration disabled - using in-memory storage only
 logger.info("MongoDB integration disabled - using in-memory storage")
 
-# Initialize database
+# Initialize database (optional)
 import asyncio
-try:
-    asyncio.run(init_db())
-    logger.info("Database initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize database: {e}")
-    raise
+if os.getenv("DATABASE_URL"):
+    try:
+        asyncio.run(init_db())
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+        logger.warning("Continuing without database initialization")
+else:
+    logger.info("No DATABASE_URL provided - skipping database initialization")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -224,7 +227,17 @@ async def process_research(job_id: str, data: ResearchRequest, user_id: str):
         # Update job status in memory (MongoDB disabled)
 @app.get("/")
 async def ping():
-    return {"message": "Alive"}
+    """Health check endpoint"""
+    try:
+        # Basic health check
+        return {
+            "status": "healthy",
+            "message": "IntelCraft API is running",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail="Health check failed")
 
 @app.websocket("/research/ws/{job_id}")
 async def websocket_endpoint(websocket: WebSocket, job_id: str):
