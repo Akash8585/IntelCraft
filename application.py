@@ -34,8 +34,9 @@ app = FastAPI(title="IntelCraft API")
 
 # Include OAuth routes
 try:
-    from backend.auth.oauth_routes import router as oauth_router
+    from backend.auth.oauth_routes import router as oauth_router, old_callback_router
     app.include_router(oauth_router)
+    app.include_router(old_callback_router)
     logger.info("OAuth routes included successfully")
 except Exception as e:
     logger.warning(f"Failed to include OAuth routes: {e}")
