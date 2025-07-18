@@ -340,10 +340,22 @@ function AppContent() {
             step: "Complete",
             message: "Research completed successfully"
           });
+          
+          // Extract research results from the new state structure
+          const researchState = statusData.result?.state || {};
+          console.log("Research completion - Full result:", statusData.result);
+          console.log("Research completion - State structure:", researchState);
+          console.log("Research completion - Available keys:", Object.keys(researchState));
+          
+          const report = researchState.report || researchState.editor?.report || researchState.briefing || researchState.final_report || "";
+          const summary = statusData.result?.summary || `Research completed for ${originalCompanyName}`;
+          
           setOutput({
-            summary: "",
+            summary: summary,
             details: {
-              report: statusData.result.report,
+              report: report,
+              state: researchState,
+              total_steps: statusData.result?.total_steps || 0
             },
           });
           setHasFinalReport(true);
