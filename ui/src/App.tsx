@@ -368,7 +368,18 @@ function AppContent() {
           console.log("Research completion - State structure:", researchState);
           console.log("Research completion - Available keys:", Object.keys(researchState));
           
+          // More detailed debugging
+          console.log("Research completion - Looking for report in:");
+          console.log("  - researchState.report:", researchState.report);
+          console.log("  - researchState.editor?.report:", researchState.editor?.report);
+          console.log("  - researchState.briefing:", researchState.briefing);
+          console.log("  - researchState.final_report:", researchState.final_report);
+          console.log("  - researchState.editor:", researchState.editor);
+          
           const report = researchState.report || researchState.editor?.report || researchState.briefing || researchState.final_report || "";
+          console.log("Research completion - Final report value:", report);
+          console.log("Research completion - Report length:", report.length);
+          
           const summary = statusData.result?.summary || `Research completed for ${originalCompanyName}`;
           
           setOutput({
