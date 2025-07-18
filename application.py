@@ -155,8 +155,8 @@ async def health():
         "version": "1.0.0"
     }
 
-async def run_research_process(job_id: str, company: str):
-    """Background research process that runs asynchronously"""
+async def run_research_process(job_id: str, company: str, company_url: str = None, industry: str = None, hq_location: str = None, help_description: str = None):
+    """Background research process that runs the actual LangGraph research system"""
     try:
         logger.info(f"Starting background research process for job {job_id}")
         
@@ -167,44 +167,74 @@ async def run_research_process(job_id: str, company: str):
             message=f"Starting research for {company}"
         )
 
-        # Simulate research progress (replace with actual research logic)
-        await asyncio.sleep(2)
+        # Import and initialize the research graph
+        try:
+            from backend.graph import Graph
+        except ImportError as e:
+            logger.error(f"Failed to import research graph: {e}")
+            raise Exception("Research system not available")
+
+        # Create research graph with WebSocket manager
+        graph = Graph(
+            company=company,
+            url=company_url,
+            hq_location=hq_location,
+            industry=industry,
+            help_description=help_description,
+            websocket_manager=websocket_manager,
+            job_id=job_id
+        )
+
+        # Send status update
         await websocket_manager.send_status_update(
             job_id=job_id,
             status="processing",
-            message="Collecting company information..."
+            message="Initializing research workflow..."
         )
 
-        await asyncio.sleep(2)
-        await websocket_manager.send_status_update(
-            job_id=job_id,
-            status="processing",
-            message="Analyzing market data..."
-        )
+        # Run the research workflow
+        thread = {"configurable": {"thread_id": job_id}}
+        results = []
+        
+        async for state in graph.run(thread):
+            logger.info(f"Research state update for job {job_id}: {state.get('current_node', 'unknown')}")
+            results.append(state)
+            
+            # Send progress update
+            await websocket_manager.send_status_update(
+                job_id=job_id,
+                status="processing",
+                message=f"Processing: {state.get('current_node', 'Research step')}"
+            )
 
-        await asyncio.sleep(2)
+        # Get final result
+        final_state = results[-1] if results else {}
+        
+        # Extract research results
+        research_result = {
+            "company": company,
+            "summary": f"Research completed for {company}",
+            "timestamp": datetime.now().isoformat(),
+            "state": final_state,
+            "total_steps": len(results)
+        }
+
+        # Send completion status
         await websocket_manager.send_status_update(
             job_id=job_id,
             status="completed",
             message="Research completed successfully",
-            result={
-                "company": company,
-                "summary": f"Research completed for {company}",
-                "timestamp": datetime.now().isoformat()
-            }
+            result=research_result
         )
 
         # Update job status
         job_status[job_id].update({
             "status": "completed",
-            "result": {
-                "company": company,
-                "summary": f"Research completed for {company}"
-            },
+            "result": research_result,
             "last_update": datetime.now().isoformat()
         })
         
-        logger.info(f"Research process completed for job {job_id}")
+        logger.info(f"Research process completed for job {job_id} with {len(results)} steps")
         
     except Exception as e:
         logger.error(f"Error in research process for job {job_id}: {str(e)}", exc_info=True)
@@ -236,7 +266,14 @@ async def research(data: ResearchRequest):
         })
 
         # Start research process in background (non-blocking)
-        asyncio.create_task(run_research_process(job_id, data.company))
+        asyncio.create_task(run_research_process(
+            job_id=job_id,
+            company=data.company,
+            company_url=data.company_url,
+            industry=data.industry,
+            hq_location=data.hq_location,
+            help_description=data.help_description
+        ))
 
         return {
             "status": "accepted",
