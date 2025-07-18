@@ -60,15 +60,59 @@ async def test_auth():
     """Test endpoint to verify auth routes are working"""
     return {"message": "Auth routes are accessible", "status": "ok"}
 
-# Add a simplified /auth/me endpoint for testing
+# Add a proper /auth/me endpoint for OAuth authentication
 @app.get("/auth/me")
-async def get_current_user_simple():
-    """Simplified /auth/me endpoint for testing"""
-    return {
-        "message": "Auth endpoint is working",
-        "status": "ok",
-        "note": "This is a test endpoint - replace with actual auth logic"
-    }
+async def get_current_user(request: Request):
+    """Get current user info from OAuth token"""
+    try:
+        # Get the Authorization header
+        auth_header = request.headers.get('Authorization')
+        if not auth_header or not auth_header.startswith('Bearer '):
+            raise HTTPException(status_code=401, detail="Missing or invalid authorization header")
+        
+        token = auth_header.split(' ')[1]
+        
+        # Import JWT validation
+        from backend.auth.security import decode_access_token
+        from backend.database.models import User
+        from backend.database.session import get_db
+        
+        # Decode the JWT token to get user ID
+        try:
+            payload = decode_access_token(token)
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except Exception as e:
+            logger.error(f"Token decode error: {str(e)}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        # Get database session and fetch user
+        db = next(get_db())
+        try:
+            from sqlalchemy import select
+            result = await db.execute(select(User).where(User.id == user_id))
+            user = result.scalar_one_or_none()
+            
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            
+            return {
+                "id": user.id,
+                "email": user.email,
+                "name": user.name,
+                "avatar_url": user.avatar_url,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified
+            }
+        finally:
+            await db.close()
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in /auth/me: {str(e)}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
 
 # CORS configuration for frontend
 frontend_url = os.getenv("FRONTEND_URL", "https://intel-craft.vercel.app")
