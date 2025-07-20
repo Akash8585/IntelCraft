@@ -14,6 +14,8 @@ import ProposalDisplay from './components/ProposalDisplay';
 import LandingPage from './components/LandingPage';
 import { AuthPage } from './components/Auth/AuthPage';
 import { AuthCallback } from './components/Auth/AuthCallback';
+import PrivacyPolicy from './components/PrivacyPolicy';
+import TermsOfService from './components/TermsOfService';
 import { useCustomAuthStore } from './stores/customAuth';
 import {ResearchOutput, DocCount,DocCounts, EnrichmentCounts, ResearchState, ResearchStatusType} from './types';
 import { checkForFinalReport } from './utils/handlers';
@@ -1045,6 +1047,8 @@ function AppContent() {
       <Route path="/auth/callback" element={<AuthCallback />} />
       <Route path="/about" element={<div className="min-h-screen flex items-center justify-center text-2xl">About Page Coming Soon</div>} />
       <Route path="/features" element={<div className="min-h-screen flex items-center justify-center text-2xl">Features Page Coming Soon</div>} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

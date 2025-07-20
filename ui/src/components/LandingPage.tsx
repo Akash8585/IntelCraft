@@ -472,6 +472,26 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGenerateResearch }) => {
             </div>
             
             <div className="border-t border-gray-200 pt-8 text-center">
+              <div className="flex flex-col sm:flex-row items-center justify-center space-y-2 sm:space-y-0 sm:space-x-6 mb-4">
+                <a 
+                  href="/privacy-policy" 
+                  className="text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  Privacy Policy
+                </a>
+                <a 
+                  href="/terms-of-service" 
+                  className="text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  Terms of Service
+                </a>
+                <a 
+                  href="mailto:akashkumarprasad984@gmail.com" 
+                  className="text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  Contact Us
+                </a>
+              </div>
               <p className="text-gray-600">
                 © 2025 IntelCraft. All rights reserved. Powered by advanced AI research technology.
               </p>
