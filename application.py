@@ -147,12 +147,12 @@ logger.info("MongoDB integration disabled - using in-memory storage")
 # Initialize database (optional)
 import asyncio
 if os.getenv("DATABASE_URL"):
-try:
+    try:
         from backend.database.session import init_db
-    asyncio.run(init_db())
-    logger.info("Database initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize database: {e}")
+        asyncio.run(init_db())
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
         logger.warning("Continuing without database initialization")
 else:
     logger.info("No DATABASE_URL provided - skipping database initialization")
@@ -163,8 +163,8 @@ async def shutdown_event():
     logger.info("Shutting down...")
     try:
         from backend.database.session import engine
-    await engine.dispose()
-    logger.info("Database connections closed")
+        await engine.dispose()
+        logger.info("Database connections closed")
     except:
         logger.info("No database connections to close")
 
@@ -249,7 +249,7 @@ async def run_research_process(job_id: str, company: str, company_url: str = Non
                 
                 # Send progress update
                 await websocket_manager.send_status_update(
-                job_id=job_id,
+                    job_id=job_id,
                     status="processing",
                     message=f"Processing: {current_node}"
                 )
@@ -289,7 +289,7 @@ async def run_research_process(job_id: str, company: str, company_url: str = Non
                     cleaned[key] = clean_state(value)
                 elif isinstance(value, list):
                     cleaned[key] = [clean_state(item) if isinstance(item, dict) else str(item) for item in value]
-        else:
+                else:
                     try:
                         # Test if value is JSON serializable
                         json.dumps(value)
@@ -343,7 +343,7 @@ This research report was generated for {company}. The research process completed
         
         # Send completion status
         await websocket_manager.send_status_update(
-                job_id=job_id,
+            job_id=job_id,
             status="completed",
             message="Research completed successfully",
             result=research_result
@@ -442,7 +442,7 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
         
         # Keep connection alive and handle messages
         try:
-        while True:
+            while True:
                 # Wait for any message from client (ping/pong or close)
                 data = await websocket.receive_text()
                 logger.info(f"Received message from client: {data}")
@@ -451,7 +451,7 @@ async def websocket_endpoint(websocket: WebSocket, job_id: str):
                 if data == "ping":
                     await websocket.send_text("pong")
                     
-            except WebSocketDisconnect:
+        except WebSocketDisconnect:
             logger.info(f"WebSocket disconnected for job: {job_id}")
         except Exception as e:
             logger.error(f"WebSocket error for job {job_id}: {str(e)}")
