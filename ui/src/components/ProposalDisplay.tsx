@@ -78,22 +78,22 @@ const ProposalDisplay: React.FC<ProposalDisplayProps> = ({
           </div>
         </div>
         
-        <button
-          onClick={handleCopyToClipboard}
-          className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[#468BFF] text-white hover:bg-[#8FBCFA] transition-all duration-200 text-sm font-medium"
-        >
-          {isCopied ? (
-            <>
-              <Check className="h-4 w-4 mr-1" />
-              Copied!
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4 mr-1" />
-              Copy
-            </>
-          )}
-        </button>
+          <button
+            onClick={handleCopyToClipboard}
+            className="inline-flex items-center justify-center px-3 py-2 rounded-lg bg-[#468BFF] text-white hover:bg-[#8FBCFA] transition-all duration-200 text-sm font-medium"
+          >
+            {isCopied ? (
+              <>
+                <Check className="h-4 w-4 mr-1" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="h-4 w-4 mr-1" />
+                Copy
+              </>
+            )}
+          </button>
       </div>
 
       {/* Proposal content */}

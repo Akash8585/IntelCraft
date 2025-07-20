@@ -142,7 +142,6 @@ export const useCustomAuthStore = create<AuthStore>()(
         set({
           accessToken,
           sessionToken,
-          isAuthenticated: true,
           isLoading: true,
           error: null,
         });
@@ -164,6 +163,7 @@ export const useCustomAuthStore = create<AuthStore>()(
         .then(user => {
           set({ 
             user,
+            isAuthenticated: true,
             isLoading: false 
           });
         })
@@ -223,7 +223,7 @@ export const useCustomAuthStore = create<AuthStore>()(
       },
 
       initializeAuth: async () => {
-        const { accessToken, user } = get();
+        const { accessToken, user, isAuthenticated } = get();
         
         // If we have tokens but no user, try to fetch user info
         if (accessToken && !user) {
@@ -241,6 +241,7 @@ export const useCustomAuthStore = create<AuthStore>()(
               const userData = await response.json();
               set({ 
                 user: userData,
+                isAuthenticated: true,
                 isLoading: false 
               });
             } else {
@@ -250,6 +251,9 @@ export const useCustomAuthStore = create<AuthStore>()(
             console.error('Auth initialization error:', error);
             get().clearAuth();
           }
+        } else if (accessToken && user && !isAuthenticated) {
+          // We have both tokens and user but isAuthenticated is false, fix this
+          set({ isAuthenticated: true });
         }
       },
     }),

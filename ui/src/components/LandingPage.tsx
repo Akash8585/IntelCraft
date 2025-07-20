@@ -170,14 +170,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGenerateResearch }) => {
                   transition={{ duration: 0.2 }}
                 >
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <Building2 className="w-6 h-6 text-white" />
-                  </div>
+                  <Building2 className="w-6 h-6 text-white" />
+                </div>
                   <div>
                     <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
                       IntelCraft
                     </h1>
                     <p className="text-xs text-gray-500 font-medium">Your AI outreach agent</p>
-                  </div>
+              </div>
                 </motion.div>
 
 
@@ -345,8 +345,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGenerateResearch }) => {
                   <p className="text-gray-600">{feature.description}</p>
                 </motion.div>
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
         </section>
 
         {/* How It Works Section */}
@@ -382,8 +382,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGenerateResearch }) => {
                   <p className="text-gray-600">{step.description}</p>
                 </motion.div>
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
         </section>
 
         {/* Testimonials Section */}
@@ -424,8 +424,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGenerateResearch }) => {
                   </div>
                 </motion.div>
               ))}
-            </div>
-          </div>
+                </div>
+              </div>
         </section>
 
         {/* CTA Section */}

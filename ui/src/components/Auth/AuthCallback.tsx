@@ -1,9 +1,11 @@
 import React, { useEffect } from 'react';
 import { useCustomAuthStore } from '../../stores/customAuth';
 import { Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export const AuthCallback: React.FC = () => {
-  const { handleCallback } = useCustomAuthStore();
+  const { handleCallback, isAuthenticated, isLoading, error } = useCustomAuthStore();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -13,14 +15,22 @@ export const AuthCallback: React.FC = () => {
     if (accessToken && sessionToken) {
       // Store the tokens
       handleCallback(accessToken, sessionToken);
-      
-      // Redirect to dashboard
-      window.location.href = '/dashboard';
     } else {
       // No tokens, redirect to login
-      window.location.href = '/auth';
+      navigate('/auth');
     }
-  }, [handleCallback]);
+  }, [handleCallback, navigate]);
+
+  // Watch for authentication state changes
+  useEffect(() => {
+    if (isAuthenticated && !isLoading) {
+      // Authentication is complete, redirect to dashboard
+      navigate('/dashboard');
+    } else if (error && !isLoading) {
+      // Authentication failed, redirect to login
+      navigate('/auth');
+    }
+  }, [isAuthenticated, isLoading, error, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
